@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleName</key>
+	<string>Desk Tasks</string>
+	<key>CFBundleExecutable</key>
+	<string>desk-tasks</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.desktasks.dev</string>
+	<key>CFBundleVersion</key>
+	<string>0.1.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+</dict>
+</plist>

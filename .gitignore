@@ -1,0 +1,28 @@
+# Build output
+build/bin/
+frontend/dist/
+frontend/node_modules/
+build/windows/installer/tmp/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+desk-tasks
+
+# DB files
+*.db
+
+# Wails generated metadata/cache
+frontend/package.json.md5
+build/windows/installer/wails_tools.nsh
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

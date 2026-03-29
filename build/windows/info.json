@@ -1,0 +1,13 @@
+{
+  "fixed": {
+    "icon/id": "MAINICON",
+    "icon/path": "",
+    "info": {
+      "0000": {
+        "ProductVersion": "0.1.0",
+        "FileDescription": "Desk Tasks",
+        "ProductName": "Desk Tasks"
+      }
+    }
+  }
+}

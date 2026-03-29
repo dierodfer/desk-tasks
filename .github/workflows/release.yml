@@ -1,0 +1,123 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.update-version.outputs.version }}
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Update version files
+        id: update-version
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          make version-set NEW_VERSION="$VERSION"
+          echo "version=$(make version-get)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore: sync version to ${{ steps.update-version.outputs.version }}"
+          file_pattern: "VERSION"
+
+  build:
+    needs: sync-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            make_target: build-windows-installer
+          - os: macos-latest
+            make_target: build-macos-universal
+          - os: ubuntu-latest
+            make_target: build-linux-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install make (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install make -y
+
+      - name: Set release version in workspace
+        env:
+          VERSION: ${{ needs.sync-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          make version-set NEW_VERSION="$VERSION"
+        shell: bash
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Add Go bin to PATH
+        run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
+        shell: bash
+
+      - name: Build
+        run: make ${{ matrix.make_target }}
+        shell: bash
+
+      - name: Prepare artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p dist
+          cp build/bin/desk-tasks.exe dist/desk-tasks-windows-amd64.exe
+          cp build/bin/desk-tasks-amd64-installer.exe dist/desk-tasks-windows-amd64-installer.exe
+        shell: bash
+
+      - name: Prepare artifact (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd build/bin
+          mkdir -p ../../dist
+          zip -r ../../dist/desk-tasks-macos-universal.zip desk-tasks.app
+          cd ../..
+        shell: bash
+
+      - name: Prepare artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p dist
+          cp build/bin/desk-tasks dist/desk-tasks-linux-amd64
+        shell: bash
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/*
