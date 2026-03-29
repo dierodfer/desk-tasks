@@ -3,6 +3,7 @@ name: Release Build
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -55,7 +56,29 @@ jobs:
 
       - name: Install make (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install make nsis -y
+        run: choco install make -y
+
+      - name: Install NSIS (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install nsis -y
+
+      - name: Verify NSIS (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "$env:ProgramFiles(x86)\NSIS",
+            "$env:ProgramFiles\NSIS"
+          )
+          foreach ($path in $candidates) {
+            if (Test-Path $path) {
+              $path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            }
+          }
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            throw "makensis not found after NSIS installation"
+          }
+          makensis /VERSION
 
       - name: Set release version in workspace
         env:
