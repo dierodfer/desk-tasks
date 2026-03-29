@@ -93,10 +93,12 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 #root {
   height: 100%;
+  overflow-x: hidden;
 }
 
 .tooltip-trigger {
@@ -148,6 +150,8 @@ body {
 }
 
 .app {
+  width: 100%;
+  min-width: 0;
   max-width: 520px;
   margin: 0 auto;
   padding: 24px 16px;
@@ -272,6 +276,8 @@ body {
 .task-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .section-label {
