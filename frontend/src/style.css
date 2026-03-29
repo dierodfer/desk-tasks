@@ -213,6 +213,20 @@ body {
   z-index: 20;
 }
 
+.settings-menu-label {
+  padding: 6px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.settings-menu-divider {
+  margin: 6px 2px;
+  border-top: 1px solid var(--border);
+}
+
 .theme-menu-item {
   width: 100%;
   border: none;

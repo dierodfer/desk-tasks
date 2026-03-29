@@ -9,26 +9,35 @@ import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
 import { CheckIcon, ChevronRightIcon, GearIcon } from "./components/Icons";
 import { useOutsideClick } from "./hooks/useOutsideClick";
+import {
+  createTranslator,
+  detectInitialLocale,
+  isLocale,
+  LOCALE_OPTIONS,
+  LOCALE_STORAGE_KEY,
+  type Locale,
+  type TranslationKey,
+} from "./i18";
 
 declare const __APP_VERSION__: string;
 
 type ThemeName = "light" | "dark" | "ocean" | "sunset";
 
-const THEME_OPTIONS: Array<{ value: ThemeName; label: string }> = [
-  { value: "light", label: "Claro" },
-  { value: "dark", label: "Oscuro" },
-  { value: "ocean", label: "Ocean" },
-  { value: "sunset", label: "Sunset" },
+const THEME_OPTIONS: Array<{ value: ThemeName; labelKey: TranslationKey }> = [
+  { value: "light", labelKey: "themeLight" },
+  { value: "dark", labelKey: "themeDark" },
+  { value: "ocean", labelKey: "themeOcean" },
+  { value: "sunset", labelKey: "themeSunset" },
 ];
 
 const VALID_THEMES = new Set<string>(THEME_OPTIONS.map((o) => o.value));
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-const PRIORITY_SECTIONS: Array<{ key: "high" | "medium" | "low"; label: string }> = [
-  { key: "high", label: "Alta" },
-  { key: "medium", label: "Media" },
-  { key: "low", label: "Baja" },
+const PRIORITY_SECTIONS: Array<{ key: "high" | "medium" | "low"; labelKey: TranslationKey }> = [
+  { key: "high", labelKey: "priorityHigh" },
+  { key: "medium", labelKey: "priorityMedium" },
+  { key: "low", labelKey: "priorityLow" },
 ];
 
 function sortTasks(tasks: Task[]): Task[] {
@@ -54,9 +63,11 @@ export default function App() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [theme, setTheme] = useState<ThemeName>("light");
+  const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const t = useMemo(() => createTranslator(locale), [locale]);
 
   const closeThemeMenu = useCallback(() => setThemeMenuOpen(false), []);
   useOutsideClick(settingsMenuRef, themeMenuOpen, closeThemeMenu);
@@ -80,9 +91,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (isLocale(saved)) {
+      setLocale(saved);
+    }
+  }, []);
+
+  useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     window.localStorage.setItem("desk-tasks-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  }, [locale]);
 
   const handleCreate = async () => {
     if (isCreatingTask) return;
@@ -141,6 +164,8 @@ export default function App() {
     [pendingTasks],
   );
 
+  const addTaskLabel = showInput ? t("taskAlreadyCreating") : t("addTask");
+
   return (
     <div className="app">
       <div className="header">
@@ -151,8 +176,8 @@ export default function App() {
             setShowInput(true);
             setEditingId(null);
           }}
-          data-tooltip={showInput ? "Ya hay una tarea en creación" : "Añadir tarea"}
-          aria-label={showInput ? "Ya hay una tarea en creación" : "Añadir tarea"}
+          data-tooltip={addTaskLabel}
+          aria-label={addTaskLabel}
           disabled={showInput || isCreatingTask}
         >
           +
@@ -162,23 +187,41 @@ export default function App() {
           <button
             className="settings-btn tooltip-trigger"
             onClick={() => setThemeMenuOpen((prev) => !prev)}
-            data-tooltip="Configuración"
-            aria-label="Configuración de tema"
+            data-tooltip={t("settings")}
+            aria-label={t("settings")}
             aria-expanded={themeMenuOpen}
           >
             <GearIcon />
           </button>
 
           {themeMenuOpen && (
-            <div className="theme-menu" role="menu" aria-label="Seleccionar tema">
+            <div className="theme-menu" role="menu" aria-label={t("settingsMenuAria")}>
+              <div className="settings-menu-label">{t("themeSectionLabel")}</div>
               {THEME_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   className={`theme-menu-item ${theme === option.value ? "active" : ""}`}
                   onClick={() => { setTheme(option.value); setThemeMenuOpen(false); }}
                 >
-                  <span>{option.label}</span>
+                  <span>{t(option.labelKey)}</span>
                   {theme === option.value && (
+                    <CheckIcon size={13} stroke="currentColor" strokeWidth={2.5} />
+                  )}
+                </button>
+              ))}
+              <div className="settings-menu-divider" />
+              <div className="settings-menu-label">{t("languageSectionLabel")}</div>
+              {LOCALE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={`theme-menu-item ${locale === option.value ? "active" : ""}`}
+                  onClick={() => {
+                    setLocale(option.value);
+                    setThemeMenuOpen(false);
+                  }}
+                >
+                  <span>{t(option.labelKey)}</span>
+                  {locale === option.value && (
                     <CheckIcon size={13} stroke="currentColor" strokeWidth={2.5} />
                   )}
                 </button>
@@ -195,7 +238,7 @@ export default function App() {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Task name..."
+              placeholder={t("taskNamePlaceholder")}
               value={inputValue}
               disabled={isCreatingTask}
               onChange={(e) => setInputValue(e.target.value)}
@@ -204,12 +247,12 @@ export default function App() {
                 if (!isCreatingTask && !inputValue.trim()) setShowInput(false);
               }}
             />
-            <span className="hint">Enter ↵</span>
+            <span className="hint">{t("enterHint")}</span>
           </div>
         )}
 
         {pendingTasks.length === 0 && !showInput && (
-          <div className="empty-state">No tasks yet. Click + to add one.</div>
+          <div className="empty-state">{t("emptyState")}</div>
         )}
 
         {pendingSections.map((section) => {
@@ -217,12 +260,13 @@ export default function App() {
           return (
             <div key={section.key} className="priority-section">
               <div className={`section-label priority-${section.key}`}>
-                {section.label}
+                {t(section.labelKey)}
               </div>
               {section.items.map((task) => (
                 <TaskItem
                   key={task.id}
                   task={task}
+                  t={t}
                   isEditing={editingId === task.id}
                   onToggleComplete={() => handleToggleComplete(task)}
                   onUpdate={handleUpdate}
@@ -242,7 +286,7 @@ export default function App() {
               onClick={() => setCompletedOpen((v) => !v)}
             >
               <ChevronRightIcon className={`chevron ${completedOpen ? "open" : ""}`} />
-              Completed ({completedTasks.length})
+              {t("completedSectionTitle", { count: completedTasks.length })}
             </button>
 
             {completedOpen &&
@@ -250,6 +294,7 @@ export default function App() {
                 <TaskItem
                   key={task.id}
                   task={task}
+                  t={t}
                   isEditing={false}
                   onToggleComplete={() => handleToggleComplete(task)}
                   onUpdate={handleUpdate}

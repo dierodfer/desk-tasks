@@ -1,6 +1,8 @@
 # Desk Tasks
 
-![Desk Tasks App Icon](build/appicon.png)
+<p align="center">
+	<img src="build/appicon.png" alt="Desk Tasks App Icon" width="140" />
+</p>
 
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![Wails](https://img.shields.io/badge/Wails-v2.12.0-181B34?logo=wails&logoColor=white)

@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { Task } from "../wailsjs/go/main/App";
 import { useOutsideClick } from "../hooks/useOutsideClick";
 import { CheckIcon, UserIcon, CloseIcon, ChevronDownIcon } from "./Icons";
+import type { TranslationKey, Translator } from "../i18";
 
 interface TaskItemProps {
   task: Task;
+  t: Translator;
   isEditing: boolean;
   onToggleComplete: () => void;
   onUpdate: (task: Task) => void;
@@ -16,14 +18,21 @@ interface TaskItemProps {
 type EditField = "name" | "contact" | null;
 
 const PRIORITIES = ["high", "medium", "low"] as const;
-const PRIORITY_LABELS: Record<string, string> = {
-  high: "alta",
-  medium: "media",
-  low: "baja",
-};
+
+function getPriorityLabelKey(priority: string): TranslationKey {
+  switch (priority) {
+    case "high":
+      return "priorityHighLower";
+    case "medium":
+      return "priorityMediumLower";
+    default:
+      return "priorityLowLower";
+  }
+}
 
 export function TaskItem({
   task,
+  t,
   isEditing,
   onToggleComplete,
   onUpdate,
@@ -37,6 +46,7 @@ export function TaskItem({
   const editRef = useRef<HTMLInputElement>(null);
   const priorityMenuRef = useRef<HTMLDivElement>(null);
   const isCompleted = task.status === "completed";
+  const currentPriority = t(getPriorityLabelKey(task.priority));
 
   useEffect(() => {
     if (editField) {
@@ -109,34 +119,34 @@ export function TaskItem({
       <button
         className={`task-check ${isCompleted ? "checked" : ""}`}
         onClick={onToggleComplete}
-        title={isCompleted ? "Mark pending" : "Mark completed"}
+        title={isCompleted ? t("markPending") : t("markCompleted")}
       >
         {isCompleted && <CheckIcon />}
       </button>
 
       {isCompleted ? (
-        <div className={`priority-dot ${task.priority}`} title={`Priority: ${task.priority}`} />
+        <div className={`priority-dot ${task.priority}`} title={t("priorityTitle", { priority: currentPriority })} />
       ) : (
         <div className="priority-control" ref={priorityMenuRef}>
           <button
             className={`priority-current p-${task.priority} tooltip-trigger`}
             onClick={togglePriorityMenu}
-            data-tooltip={`Prioridad actual: ${task.priority}. Cambiar prioridad`}
+            data-tooltip={t("currentPriorityTooltip", { priority: currentPriority })}
             aria-expanded={isPriorityMenuOpen}
-            aria-label={`Prioridad actual ${task.priority}. Click para cambiar`}
+            aria-label={t("currentPriorityAria", { priority: currentPriority })}
           >
             <span className="dot" />
             <ChevronDownIcon className={`priority-chevron ${isPriorityMenuOpen ? "open" : ""}`} />
           </button>
 
           {isPriorityMenuOpen && (
-            <div className="priority-selector" role="menu" aria-label="Selector de prioridad">
+            <div className="priority-selector" role="menu" aria-label={t("prioritySelectorAria")}>
               {PRIORITIES.map((p) => (
                 <button
                   key={p}
                   className={`priority-btn p-${p} tooltip-trigger ${task.priority === p ? "active" : ""}`}
                   onClick={() => handlePriorityChange(p)}
-                  data-tooltip={`Prioridad ${PRIORITY_LABELS[p]}`}
+                  data-tooltip={t("priorityOptionTooltip", { priority: t(getPriorityLabelKey(p)) })}
                 >
                   <span className="dot" />
                 </button>
@@ -161,7 +171,7 @@ export function TaskItem({
           <div
             className={`task-name ${isCompleted ? "completed-text" : ""}`}
             onClick={() => startEdit("name")}
-            title="Click to edit name"
+            title={t("clickToEditName")}
           >
             {task.name}
           </div>
@@ -173,27 +183,27 @@ export function TaskItem({
               ref={editRef}
               className="inline-edit-small"
               type="text"
-              placeholder="Contact name or email"
+              placeholder={t("contactPlaceholder")}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onBlur={commitEdit}
             />
           ) : task.contact ? (
-            <span className="task-contact" onClick={() => startEdit("contact")} title="Click to edit contact">
+            <span className="task-contact" onClick={() => startEdit("contact")} title={t("clickToEditContact")}>
               <UserIcon /> {task.contact}
             </span>
           ) : (
             !isCompleted && (
-              <span className="task-contact task-contact--empty" onClick={() => startEdit("contact")} title="Add contact">
-                <UserIcon /> contact
+              <span className="task-contact task-contact--empty" onClick={() => startEdit("contact")} title={t("addContact")}>
+                <UserIcon /> {t("contactWord")}
               </span>
             )
           )}
         </div>
       </div>
 
-      <button className="delete-btn" onClick={onDelete} title="Delete task">
+      <button className="delete-btn" onClick={onDelete} title={t("deleteTask")}>
         <CloseIcon />
       </button>
     </div>
