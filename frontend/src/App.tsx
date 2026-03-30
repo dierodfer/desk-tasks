@@ -4,6 +4,7 @@ import {
   GetAllTasks,
   UpdateTask,
   DeleteTask,
+  QuitApp,
 } from "./wailsjs/go/main/App";
 import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
@@ -40,6 +41,12 @@ const PRIORITY_SECTIONS: Array<{ key: "high" | "medium" | "low"; labelKey: Trans
   { key: "low", labelKey: "priorityLow" },
 ];
 
+const NEW_TASK_PRIORITIES: Array<{ value: "high" | "medium" | "low"; labelKey: TranslationKey }> = [
+  { value: "high", labelKey: "priorityHigh" },
+  { value: "medium", labelKey: "priorityMedium" },
+  { value: "low", labelKey: "priorityLow" },
+];
+
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const pa = PRIORITY_ORDER[a.priority] ?? 2;
@@ -59,14 +66,17 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("low");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [newlyCreatedTaskId, setNewlyCreatedTaskId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const createAnimationTimeoutRef = useRef<number | null>(null);
   const t = useMemo(() => createTranslator(locale), [locale]);
 
   const closeThemeMenu = useCallback(() => setThemeMenuOpen(false), []);
@@ -107,15 +117,32 @@ export default function App() {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
 
+  useEffect(() => {
+    return () => {
+      if (createAnimationTimeoutRef.current) {
+        window.clearTimeout(createAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleCreate = async () => {
     if (isCreatingTask) return;
     const name = inputValue.trim();
     if (!name) return;
     setIsCreatingTask(true);
     try {
-      const newTask = await CreateTask(name);
+      const newTask = await CreateTask(name, newTaskPriority);
       setTasks((prev) => [...prev, newTask]);
+      setNewlyCreatedTaskId(newTask.id);
+      if (createAnimationTimeoutRef.current) {
+        window.clearTimeout(createAnimationTimeoutRef.current);
+      }
+      createAnimationTimeoutRef.current = window.setTimeout(() => {
+        setNewlyCreatedTaskId(null);
+        createAnimationTimeoutRef.current = null;
+      }, 450);
       setInputValue("");
+      setNewTaskPriority("low");
       setShowInput(false);
     } finally {
       setIsCreatingTask(false);
@@ -124,7 +151,11 @@ export default function App() {
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleCreate();
-    else if (e.key === "Escape") { setShowInput(false); setInputValue(""); }
+    else if (e.key === "Escape") {
+      setShowInput(false);
+      setInputValue("");
+      setNewTaskPriority("low");
+    }
   };
 
   const handleUpdate = useCallback(async (task: Task) => {
@@ -164,28 +195,34 @@ export default function App() {
     [pendingTasks],
   );
 
-  const addTaskLabel = showInput ? t("taskAlreadyCreating") : t("addTask");
+  const handleAddTaskClick = useCallback(() => {
+    if (isCreatingTask || showInput) return;
+    setShowInput(true);
+    setEditingId(null);
+  }, [isCreatingTask, showInput]);
+
+  const addTaskLabel = isCreatingTask || showInput
+    ? t("taskAlreadyCreating")
+    : t("addTask");
 
   return (
     <div className="app">
       <div className="header">
         <button
-          className="add-btn tooltip-trigger"
-          onClick={() => {
-            if (showInput || isCreatingTask) return;
-            setShowInput(true);
-            setEditingId(null);
+          className="add-btn tooltip-trigger tooltip-right"
+          onMouseDown={(e) => {
+            if (showInput) e.preventDefault();
           }}
+          onClick={handleAddTaskClick}
           data-tooltip={addTaskLabel}
           aria-label={addTaskLabel}
-          disabled={showInput || isCreatingTask}
         >
           +
         </button>
 
         <div className="settings-menu-wrap" ref={settingsMenuRef}>
           <button
-            className="settings-btn tooltip-trigger"
+            className="settings-btn tooltip-trigger tooltip-left"
             onClick={() => setThemeMenuOpen((prev) => !prev)}
             data-tooltip={t("settings")}
             aria-label={t("settings")}
@@ -226,6 +263,16 @@ export default function App() {
                   )}
                 </button>
               ))}
+              <div className="settings-menu-divider" />
+              <button
+                className="theme-menu-item settings-exit-item"
+                onClick={() => {
+                  setThemeMenuOpen(false);
+                  QuitApp();
+                }}
+              >
+                <span>{t("exitApp")}</span>
+              </button>
               <div className="theme-menu-version">v{appVersion}</div>
             </div>
           )}
@@ -235,6 +282,24 @@ export default function App() {
       <div className="task-list">
         {showInput && (
           <div className="inline-input-row">
+            <div className="new-task-priority-points" role="radiogroup" aria-label={t("newTaskPriorityAria")}>
+              {NEW_TASK_PRIORITIES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={newTaskPriority === option.value}
+                  aria-label={`${t("newTaskPriorityAria")}: ${t(option.labelKey)}`}
+                  className={`priority-btn new-task-priority-btn p-${option.value} ${newTaskPriority === option.value ? "active" : ""}`}
+                  disabled={isCreatingTask}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setNewTaskPriority(option.value)}
+                  data-tooltip={t("priorityOptionTooltip", { priority: t(option.labelKey) })}
+                >
+                  <span className="dot" />
+                </button>
+              ))}
+            </div>
             <input
               ref={inputRef}
               type="text"
@@ -244,7 +309,10 @@ export default function App() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleInputKeyDown}
               onBlur={() => {
-                if (!isCreatingTask && !inputValue.trim()) setShowInput(false);
+                if (!isCreatingTask && !inputValue.trim()) {
+                  setShowInput(false);
+                  setNewTaskPriority("low");
+                }
               }}
             />
             <span className="hint">{t("enterHint")}</span>
@@ -268,6 +336,7 @@ export default function App() {
                   task={task}
                   t={t}
                   isEditing={editingId === task.id}
+                  isNewlyCreated={newlyCreatedTaskId === task.id}
                   onToggleComplete={() => handleToggleComplete(task)}
                   onUpdate={handleUpdate}
                   onDelete={() => handleDelete(task.id)}
@@ -289,20 +358,24 @@ export default function App() {
               {t("completedSectionTitle", { count: completedTasks.length })}
             </button>
 
-            {completedOpen &&
-              completedTasks.map((task) => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  t={t}
-                  isEditing={false}
-                  onToggleComplete={() => handleToggleComplete(task)}
-                  onUpdate={handleUpdate}
-                  onDelete={() => handleDelete(task.id)}
-                  onEditStart={noop}
-                  onEditEnd={noop}
-                />
-              ))}
+            {completedOpen && (
+              <div className="completed-items">
+                {completedTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    t={t}
+                    isEditing={false}
+                    isNewlyCreated={newlyCreatedTaskId === task.id}
+                    onToggleComplete={() => handleToggleComplete(task)}
+                    onUpdate={handleUpdate}
+                    onDelete={() => handleDelete(task.id)}
+                    onEditStart={noop}
+                    onEditEnd={noop}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

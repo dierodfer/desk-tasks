@@ -8,6 +8,7 @@ interface TaskItemProps {
   task: Task;
   t: Translator;
   isEditing: boolean;
+  isNewlyCreated?: boolean;
   onToggleComplete: () => void;
   onUpdate: (task: Task) => void;
   onDelete: () => void;
@@ -34,6 +35,7 @@ export function TaskItem({
   task,
   t,
   isEditing,
+  isNewlyCreated = false,
   onToggleComplete,
   onUpdate,
   onDelete,
@@ -43,8 +45,12 @@ export function TaskItem({
   const [editField, setEditField] = useState<EditField>(null);
   const [editValue, setEditValue] = useState("");
   const [isPriorityMenuOpen, setIsPriorityMenuOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isPendingTransition, setIsPendingTransition] = useState(false);
   const editRef = useRef<HTMLInputElement>(null);
   const priorityMenuRef = useRef<HTMLDivElement>(null);
+  const deleteConfirmRef = useRef<HTMLDivElement>(null);
+  const pendingTransitionTimeoutRef = useRef<number | null>(null);
   const isCompleted = task.status === "completed";
   const currentPriority = t(getPriorityLabelKey(task.priority));
 
@@ -59,12 +65,26 @@ export function TaskItem({
     if (!isEditing) setEditField(null);
   }, [isEditing]);
 
+  useEffect(() => {
+    return () => {
+      if (pendingTransitionTimeoutRef.current) {
+        window.clearTimeout(pendingTransitionTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const closePriorityMenu = useCallback(() => {
     setIsPriorityMenuOpen(false);
     onEditEnd();
   }, [onEditEnd]);
 
   useOutsideClick(priorityMenuRef, isPriorityMenuOpen, closePriorityMenu);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setIsDeleteConfirmOpen(false);
+  }, []);
+
+  useOutsideClick(deleteConfirmRef, isDeleteConfirmOpen, closeDeleteConfirm);
 
   const startEdit = useCallback(
     (field: EditField) => {
@@ -114,12 +134,42 @@ export function TaskItem({
     });
   };
 
+  const handleDeleteClick = () => {
+    if (isDeleteConfirmOpen) {
+      setIsDeleteConfirmOpen(false);
+      onDelete();
+      return;
+    }
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleToggleStatus = () => {
+    if (!isCompleted) {
+      onToggleComplete();
+      return;
+    }
+
+    if (isPendingTransition) return;
+
+    setIsPendingTransition(true);
+
+    pendingTransitionTimeoutRef.current = window.setTimeout(() => {
+      onToggleComplete();
+      setIsPendingTransition(false);
+      pendingTransitionTimeoutRef.current = null;
+    }, 180);
+  };
+
   return (
-    <div className={`task-item ${isCompleted ? "completed" : ""}`}>
+    <div
+      className={`task-item ${isCompleted ? "completed" : ""} ${isPendingTransition ? "status-to-pending" : ""} ${isNewlyCreated ? "just-created" : ""}`}
+    >
       <button
         className={`task-check ${isCompleted ? "checked" : ""}`}
-        onClick={onToggleComplete}
+        onClick={handleToggleStatus}
+        disabled={isPendingTransition}
         title={isCompleted ? t("markPending") : t("markCompleted")}
+        aria-label={isCompleted ? t("markPending") : t("markCompleted")}
       >
         {isCompleted && <CheckIcon />}
       </button>
@@ -203,9 +253,20 @@ export function TaskItem({
         </div>
       </div>
 
-      <button className="delete-btn" onClick={onDelete} title={t("deleteTask")}>
-        <CloseIcon />
-      </button>
+      <div className="delete-control" ref={deleteConfirmRef}>
+        <button
+          className={`delete-btn ${isDeleteConfirmOpen ? "confirm-ready" : ""}`}
+          onClick={handleDeleteClick}
+          title={isDeleteConfirmOpen ? t("deleteConfirmAction") : t("deleteTask")}
+          aria-label={isDeleteConfirmOpen ? t("deleteConfirmAction") : t("deleteTask")}
+          aria-expanded={isDeleteConfirmOpen}
+        >
+          <span className="delete-icon-wrap" aria-hidden={isDeleteConfirmOpen}>
+            <CloseIcon />
+          </span>
+          <span className="delete-label">{t("deleteConfirmAction")}</span>
+        </button>
+      </div>
     </div>
   );
 }
