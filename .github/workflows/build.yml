@@ -45,18 +45,21 @@ jobs:
         shell: pwsh
         run: |
           $candidates = @(
-            "$env:ProgramFiles(x86)\NSIS",
-            "$env:ProgramFiles\NSIS"
+            "$env:ProgramFiles(x86)\NSIS\makensis.exe",
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            "$env:ChocolateyInstall\bin\makensis.exe"
           )
-          foreach ($path in $candidates) {
-            if (Test-Path $path) {
-              $path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            }
-          }
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $makensis) {
             throw "makensis not found after NSIS installation"
           }
-          makensis /VERSION
+
+          $makensisDir = Split-Path -Parent $makensis
+          $makensisDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$makensisDir;$env:PATH"
+
+          & $makensis /VERSION
 
       - name: Set up Go
         uses: actions/setup-go@v6
