@@ -44,14 +44,25 @@ jobs:
         if: ${{ inputs.target_os == 'windows-latest' }}
         shell: pwsh
         run: |
-          $candidates = @(
-            "$env:ProgramFiles(x86)\NSIS\makensis.exe",
-            "$env:ProgramFiles\NSIS\makensis.exe",
-            "$env:ChocolateyInstall\bin\makensis.exe"
-          )
+          $candidateDirs = @(
+            "${env:ProgramFiles(x86)}\NSIS",
+            "${env:ProgramFiles}\NSIS",
+            "${env:ChocolateyInstall}\bin",
+            "${env:ChocolateyInstall}\lib\nsis\tools",
+            "${env:ChocolateyInstall}\lib\nsis.install\tools"
+          ) | Where-Object { $_ -and (Test-Path $_) }
 
-          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $candidateFiles = $candidateDirs | ForEach-Object { Join-Path $_ "makensis.exe" }
+          $makensis = $candidateFiles | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (-not $makensis -and $env:ChocolateyInstall) {
+            $makensis = Get-ChildItem -Path "${env:ChocolateyInstall}\lib" -Filter "makensis.exe" -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
           if (-not $makensis) {
+            Write-Host "Checked candidate paths:"
+            $candidateFiles | ForEach-Object { Write-Host " - $_" }
             throw "makensis not found after NSIS installation"
           }
 
