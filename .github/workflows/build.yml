@@ -4,21 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       target_os:
-        description: Runner OS to build (or all)
-        required: false
+        description: Runner OS to build
+        required: true
         type: choice
         options:
-          - all
           - windows-latest
           - macos-latest
           - ubuntu-latest
-        default: all
+        default: ubuntu-latest
 
   workflow_call:
     inputs:
       target_os:
-        required: false
-        default: all
+        required: true
         type: string
       tag_name:
         required: true
@@ -29,32 +27,21 @@ permissions:
 
 jobs:
   build:
-    if: ${{ inputs.target_os == 'all' || inputs.target_os == matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            make_target: build-windows-installer
-          - os: macos-latest
-            make_target: build-macos-universal
-          - os: ubuntu-latest
-            make_target: build-linux-amd64
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ inputs.target_os }}
     steps:
       - name: Checkout current ref
         uses: actions/checkout@v6
 
       - name: Install make (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ inputs.target_os == 'windows-latest' }}
         run: choco install make -y
 
       - name: Install NSIS (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ inputs.target_os == 'windows-latest' }}
         run: choco install nsis -y
 
       - name: Verify NSIS (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ inputs.target_os == 'windows-latest' }}
         shell: pwsh
         run: |
           $candidates = @(
@@ -84,7 +71,7 @@ jobs:
           node-version: "22"
 
       - name: Install Linux build dependencies
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ inputs.target_os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev
@@ -97,11 +84,27 @@ jobs:
         shell: bash
 
       - name: Build
-        run: make ${{ matrix.make_target }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.target_os }}" in
+            windows-latest)
+              make build-windows-installer
+              ;;
+            macos-latest)
+              make build-macos-universal
+              ;;
+            ubuntu-latest)
+              make build-linux-amd64
+              ;;
+            *)
+              echo "Unsupported target_os: ${{ inputs.target_os }}"
+              exit 1
+              ;;
+          esac
         shell: bash
 
       - name: Prepare artifact (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ inputs.target_os == 'windows-latest' }}
         run: |
           mkdir -p dist
           cp build/bin/desk-tasks.exe dist/desk-tasks-windows-amd64.exe
@@ -109,7 +112,7 @@ jobs:
         shell: bash
 
       - name: Prepare artifact (macOS)
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ inputs.target_os == 'macos-latest' }}
         run: |
           cd build/bin
           mkdir -p ../../dist
@@ -118,7 +121,7 @@ jobs:
         shell: bash
 
       - name: Prepare artifact (Linux)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ inputs.target_os == 'ubuntu-latest' }}
         run: |
           mkdir -p dist
           cp build/bin/desk-tasks dist/desk-tasks-linux-amd64
@@ -127,7 +130,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desk-tasks-${{ matrix.os }}
+          name: desk-tasks-${{ inputs.target_os }}
           path: dist/*
           if-no-files-found: error
 

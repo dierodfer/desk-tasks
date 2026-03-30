@@ -32,11 +32,18 @@ jobs:
           file_pattern: "VERSION"
 
   build:
-    name: 'Build and publish release assets'
+    name: Build and publish (${{ matrix.target_os }})
     needs: sync-version
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
     uses: ./.github/workflows/build.yml
     with:
-      target_os: all
+      target_os: ${{ matrix.target_os }}
       tag_name: ${{ github.event.release.tag_name }}
     permissions:
       contents: write
