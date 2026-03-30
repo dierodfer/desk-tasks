@@ -36,29 +36,20 @@ jobs:
         if: ${{ inputs.target_os == 'windows-latest' }}
         run: choco install make -y
 
-      - name: Install NSIS (Windows)
-        if: ${{ inputs.target_os == 'windows-latest' }}
-        run: choco install nsis -y
-
-      - name: Verify NSIS (Windows)
+      - name: Setup NSIS (Windows)
         if: ${{ inputs.target_os == 'windows-latest' }}
         shell: pwsh
         run: |
-          $makensis = @(
-            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
-            "${env:ProgramFiles}\NSIS\makensis.exe",
-            "${env:ChocolateyInstall}\bin\makensis.exe"
-          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          choco install nsis -y
 
-          if (-not $makensis) {
-            throw "makensis not found after NSIS installation"
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            $makensis = "${env:ProgramFiles}\NSIS\makensis.exe"
           }
 
-          $makensisDir = Split-Path -Parent $makensis
+          $makensisDir = Split-Path -Parent -Path $makensis
           $makensisDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$makensisDir;$env:PATH"
-
-          & $makensis /VERSION
 
       - name: Set up Go
         uses: actions/setup-go@v6
