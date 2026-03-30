@@ -7,12 +7,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	bolt "go.etcd.io/bbolt"
 )
 
 var tasksBucket = []byte("tasks")
+
+const (
+	taskStatusPending   = "pending"
+	taskStatusCompleted = "completed"
+
+	taskPriorityLow    = "low"
+	taskPriorityMedium = "medium"
+	taskPriorityHigh   = "high"
+)
 
 // Task represents a single task item.
 type Task struct {
@@ -78,17 +89,51 @@ func itob(v uint64) []byte {
 	return b
 }
 
+func parsePriority(priority string) (string, bool) {
+	switch priority {
+	case taskPriorityHigh, taskPriorityMedium, taskPriorityLow:
+		return priority, true
+	default:
+		return "", false
+	}
+}
+
+func normalizePriority(priority string) string {
+	if parsed, ok := parsePriority(priority); ok {
+		return parsed
+	}
+	return taskPriorityLow
+}
+
+func parseStatus(status string) (string, bool) {
+	switch status {
+	case taskStatusPending, taskStatusCompleted:
+		return status, true
+	default:
+		return "", false
+	}
+}
+
 // CreateTask creates a new task with the given name.
-func (a *App) CreateTask(name string) (Task, error) {
+func (a *App) CreateTask(name string, priority string) (Task, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Task{}, fmt.Errorf("task name cannot be empty")
+	}
+
 	var task Task
 	err := a.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(tasksBucket)
-		id, _ := b.NextSequence()
+		id, err := b.NextSequence()
+		if err != nil {
+			return fmt.Errorf("failed to generate task id: %w", err)
+		}
+
 		task = Task{
 			ID:        id,
 			Name:      name,
-			Status:    "pending",
-			Priority:  "low",
+			Status:    taskStatusPending,
+			Priority:  normalizePriority(priority),
 			Contact:   "",
 			Order:     id,
 			CreatedAt: time.Now().UTC().Format(time.RFC3339),
@@ -139,11 +184,11 @@ func (a *App) UpdateTask(task Task) (Task, error) {
 		if task.Name != "" {
 			current.Name = task.Name
 		}
-		if task.Status != "" {
-			current.Status = task.Status
+		if status, ok := parseStatus(task.Status); ok {
+			current.Status = status
 		}
-		if task.Priority != "" {
-			current.Priority = task.Priority
+		if priority, ok := parsePriority(task.Priority); ok {
+			current.Priority = priority
 		}
 		// Contact can be set to empty intentionally, so always update it.
 		current.Contact = task.Contact
@@ -163,4 +208,9 @@ func (a *App) DeleteTask(id uint64) error {
 		b := tx.Bucket(tasksBucket)
 		return b.Delete(itob(id))
 	})
+}
+
+// QuitApp closes the desktop application.
+func (a *App) QuitApp() {
+	runtime.Quit(a.ctx)
 }

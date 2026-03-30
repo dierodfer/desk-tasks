@@ -11,7 +11,8 @@ export interface Task {
   createdAt: string;
 }
 
-export function CreateTask(name: string): Promise<Task>;
+export function CreateTask(name: string, priority: string): Promise<Task>;
 export function GetAllTasks(): Promise<Task[]>;
 export function UpdateTask(task: Task): Promise<Task>;
 export function DeleteTask(id: number): Promise<void>;
+export function QuitApp(): Promise<void>;

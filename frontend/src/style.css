@@ -24,6 +24,8 @@
   --success: #38a169;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --motion-fast: 0.16s;
+  --motion-normal: 0.24s;
 }
 
 :root[data-theme="dark"] {
@@ -149,6 +151,50 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
+.tooltip-trigger.tooltip-right::after {
+  left: calc(100% + 10px);
+  bottom: 50%;
+  transform: translateX(4px) translateY(50%);
+}
+
+.tooltip-trigger.tooltip-right::before {
+  left: calc(100% + 4px);
+  bottom: 50%;
+  transform: translateX(4px) translateY(50%);
+  border-width: 5px 5px 5px 0;
+  border-color: transparent var(--tooltip-bg) transparent transparent;
+}
+
+.tooltip-trigger.tooltip-left::after {
+  left: auto;
+  right: calc(100% + 10px);
+  bottom: 50%;
+  transform: translateX(-4px) translateY(50%);
+}
+
+.tooltip-trigger.tooltip-left::before {
+  left: auto;
+  right: calc(100% + 4px);
+  bottom: 50%;
+  transform: translateX(-4px) translateY(50%);
+  border-width: 5px 0 5px 5px;
+  border-color: transparent transparent transparent var(--tooltip-bg);
+}
+
+.tooltip-trigger.tooltip-right:hover::after,
+.tooltip-trigger.tooltip-right:hover::before,
+.tooltip-trigger.tooltip-right:focus-visible::after,
+.tooltip-trigger.tooltip-right:focus-visible::before {
+  transform: translateX(0) translateY(50%);
+}
+
+.tooltip-trigger.tooltip-left:hover::after,
+.tooltip-trigger.tooltip-left:hover::before,
+.tooltip-trigger.tooltip-left:focus-visible::after,
+.tooltip-trigger.tooltip-left:focus-visible::before {
+  transform: translateX(0) translateY(50%);
+}
+
 .app {
   width: 100%;
   min-width: 0;
@@ -158,6 +204,7 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
+  animation: app-enter 0.3s ease-out both;
 }
 
 /* Header */
@@ -185,7 +232,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
   outline: none;
 }
 
@@ -198,6 +245,11 @@ body {
 .settings-btn svg {
   width: 16px;
   height: 16px;
+  transition: transform var(--motion-normal) ease;
+}
+
+.settings-btn[aria-expanded="true"] svg {
+  transform: rotate(35deg);
 }
 
 .theme-menu {
@@ -211,6 +263,8 @@ body {
   box-shadow: var(--shadow);
   padding: 6px;
   z-index: 20;
+  transform-origin: top right;
+  animation: menu-in 0.18s ease-out both;
 }
 
 .settings-menu-label {
@@ -250,6 +304,14 @@ body {
   font-weight: 600;
 }
 
+.settings-exit-item {
+  color: var(--high);
+}
+
+.settings-exit-item:hover {
+  background: color-mix(in srgb, var(--high) 14%, transparent);
+}
+
 .theme-menu-version {
   margin-top: 6px;
   padding: 6px 8px 2px;
@@ -273,7 +335,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: background var(--motion-fast);
   flex-shrink: 0;
 }
 
@@ -324,12 +386,39 @@ body {
 .inline-input-row {
   display: flex;
   align-items: center;
+  gap: 8px;
   background: var(--surface);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 8px 12px;
   margin-bottom: 8px;
   box-shadow: var(--shadow);
+  animation: row-in 0.18s ease-out both;
+}
+
+.new-task-priority-points {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.new-task-priority-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.new-task-priority-btn .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.new-task-priority-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .inline-input-row input {
@@ -359,15 +448,30 @@ body {
   padding: 10px 12px;
   margin-bottom: 6px;
   box-shadow: var(--shadow);
-  transition: border-color 0.15s;
+  transition: border-color var(--motion-fast), transform var(--motion-fast), box-shadow var(--motion-fast), background-color var(--motion-fast);
 }
 
 .task-item:hover {
   border-color: var(--border-hover);
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .task-item.completed {
-  opacity: 0.6;
+  opacity: 0.68;
+}
+
+.task-item.just-created {
+  animation: task-created 0.26s ease-out both;
+}
+
+.task-item.status-to-pending {
+  animation: task-to-pending 0.34s ease-out both;
+}
+
+.task-item.status-to-pending .task-check {
+  animation: check-reset 0.24s ease-out;
 }
 
 /* Checkbox */
@@ -395,9 +499,17 @@ body {
   border-color: var(--success);
 }
 
+.task-check:disabled {
+  cursor: default;
+}
+
 .task-check svg {
   width: 12px;
   height: 12px;
+}
+
+.task-check.checked svg {
+  animation: check-pop 0.26s ease-out;
 }
 
 /* Priority dot */
@@ -587,6 +699,10 @@ body {
   padding-top: 12px;
 }
 
+.completed-items {
+  animation: row-in 0.2s ease-out both;
+}
+
 .completed-header {
   display: flex;
   align-items: center;
@@ -619,9 +735,16 @@ body {
 }
 
 /* Delete button */
+.delete-control {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .delete-btn {
-  background: none;
-  border: none;
+  min-width: 20px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
   cursor: pointer;
   color: var(--text-secondary);
   padding: 2px;
@@ -629,11 +752,25 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  overflow: hidden;
+  transition:
+    opacity var(--motion-fast),
+    color var(--motion-fast),
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    min-width var(--motion-fast),
+    padding var(--motion-fast),
+    border-radius var(--motion-fast);
 }
 
 .task-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn.confirm-ready,
+.delete-control:focus-within .delete-btn {
   opacity: 1;
 }
 
@@ -646,10 +783,156 @@ body {
   height: 14px;
 }
 
+.delete-icon-wrap {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: width var(--motion-fast), opacity var(--motion-fast);
+}
+
+.delete-label {
+  max-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  transform: translateX(-4px);
+  font-size: 11px;
+  font-weight: 600;
+  transition: max-width var(--motion-fast), opacity var(--motion-fast), transform var(--motion-fast);
+}
+
+.delete-btn.confirm-ready {
+  min-width: 88px;
+  border-color: var(--high);
+  border-radius: 999px;
+  background: var(--high);
+  color: #fff;
+  padding: 0 9px;
+  animation: menu-in 0.16s ease-out both;
+}
+
+.delete-btn.confirm-ready:hover {
+  background: color-mix(in srgb, var(--high) 86%, black);
+  color: #fff;
+}
+
+.delete-btn.confirm-ready .delete-icon-wrap {
+  width: 0;
+  opacity: 0;
+}
+
+.delete-btn.confirm-ready .delete-label {
+  max-width: 68px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
 /* Empty state */
 .empty-state {
   text-align: center;
   color: var(--text-secondary);
   padding: 40px 0;
   font-size: 14px;
+}
+
+@keyframes app-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes task-created {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes task-to-pending {
+  0% {
+    transform: scale(1);
+    border-color: var(--border);
+    box-shadow: var(--shadow);
+  }
+  55% {
+    transform: translateX(-1px) scale(1.02);
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    border-color: var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-reset {
+  0% {
+    transform: scale(1);
+  }
+  55% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
