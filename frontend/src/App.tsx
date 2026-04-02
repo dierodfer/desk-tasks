@@ -18,11 +18,13 @@ import {
   LOCALE_STORAGE_KEY,
   type Locale,
   type TranslationKey,
+  type Translator,
 } from "./i18";
 
 declare const __APP_VERSION__: string;
 
 type ThemeName = "light" | "dark" | "ocean" | "sunset";
+type HoldPreset = "tomorrow" | "indefinite" | "today-time";
 
 const THEME_OPTIONS: Array<{ value: ThemeName; labelKey: TranslationKey }> = [
   { value: "light", labelKey: "themeLight" },
@@ -47,12 +49,80 @@ const NEW_TASK_PRIORITIES: Array<{ value: "high" | "medium" | "low"; labelKey: T
   { value: "low", labelKey: "priorityLow" },
 ];
 
+const TASK_STATUS_PENDING = "pending";
+const TASK_STATUS_COMPLETED = "completed";
+const TASK_STATUS_ON_HOLD = "on_hold";
+
+const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const pa = PRIORITY_ORDER[a.priority] ?? 2;
     const pb = PRIORITY_ORDER[b.priority] ?? 2;
     return pa !== pb ? pa - pb : a.order - b.order;
   });
+}
+
+function sortOnHoldTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const aHasDate = a.holdUntil.trim().length > 0;
+    const bHasDate = b.holdUntil.trim().length > 0;
+    if (aHasDate && bHasDate) {
+      const ad = new Date(a.holdUntil).getTime();
+      const bd = new Date(b.holdUntil).getTime();
+      if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) {
+        return ad - bd;
+      }
+    }
+    if (aHasDate !== bHasDate) {
+      return aHasDate ? -1 : 1;
+    }
+    const pa = PRIORITY_ORDER[a.priority] ?? 2;
+    const pb = PRIORITY_ORDER[b.priority] ?? 2;
+    return pa !== pb ? pa - pb : a.order - b.order;
+  });
+}
+
+function getTomorrowAtEightAM(): Date {
+  const result = new Date();
+  result.setDate(result.getDate() + 1);
+  result.setHours(8, 0, 0, 0);
+  return result;
+}
+
+function parseTodayTimeInput(timeText: string): Date | null {
+  const normalized = timeText.trim();
+  const match = HOLD_TIME_REGEX.exec(normalized);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+    return null;
+  }
+  const result = new Date();
+  result.setHours(hours, minutes, 0, 0);
+  return result;
+}
+
+function formatHoldNote(task: Task, locale: Locale, t: Translator): string {
+  if (task.holdUntil.trim().length === 0) {
+    return t("holdIndefiniteBadge");
+  }
+
+  const date = new Date(task.holdUntil);
+  if (Number.isNaN(date.getTime())) {
+    return t("holdIndefiniteBadge");
+  }
+
+  const localeTag = locale === "es" ? "es-ES" : "en-US";
+  const formatter = new Intl.DateTimeFormat(localeTag, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return t("holdUntilLabel", { date: formatter.format(date) });
 }
 
 const noop = () => {};
@@ -69,6 +139,7 @@ export default function App() {
   const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("low");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [onHoldOpen, setOnHoldOpen] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
@@ -88,6 +159,13 @@ export default function App() {
   }, []);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void loadTasks();
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadTasks]);
 
   useEffect(() => {
     if (showInput) inputRef.current?.focus();
@@ -169,8 +247,39 @@ export default function App() {
   }, []);
 
   const handleToggleComplete = useCallback(async (task: Task) => {
-    const newStatus = task.status === "pending" ? "completed" : "pending";
-    const updated = await UpdateTask({ ...task, status: newStatus });
+    const newStatus = task.status === TASK_STATUS_PENDING
+      ? TASK_STATUS_COMPLETED
+      : TASK_STATUS_PENDING;
+    const updated = await UpdateTask({ ...task, status: newStatus, holdUntil: "" });
+    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  }, []);
+
+  const handleResumeFromHold = useCallback(async (task: Task) => {
+    const updated = await UpdateTask({ ...task, status: TASK_STATUS_PENDING, holdUntil: "" });
+    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  }, []);
+
+  const handleSendToHold = useCallback(async (task: Task, preset: HoldPreset, timeText?: string) => {
+    let holdDate: Date | null = null;
+
+    if (preset === "tomorrow") {
+      holdDate = getTomorrowAtEightAM();
+    } else if (preset === "today-time") {
+      holdDate = parseTodayTimeInput(timeText ?? "");
+      if (!holdDate) {
+        return;
+      }
+      if (holdDate.getTime() <= Date.now()) {
+        return;
+      }
+    }
+
+    const holdUntil = holdDate ? holdDate.toISOString() : "";
+    const updated = await UpdateTask({
+      ...task,
+      status: TASK_STATUS_ON_HOLD,
+      holdUntil,
+    });
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, []);
 
@@ -178,11 +287,15 @@ export default function App() {
   const handleEditEnd = useCallback(() => setEditingId(null), []);
 
   const pendingTasks = useMemo(
-    () => sortTasks(tasks.filter((t) => t.status === "pending")),
+    () => sortTasks(tasks.filter((t) => t.status === TASK_STATUS_PENDING)),
+    [tasks],
+  );
+  const onHoldTasks = useMemo(
+    () => sortOnHoldTasks(tasks.filter((t) => t.status === TASK_STATUS_ON_HOLD)),
     [tasks],
   );
   const completedTasks = useMemo(
-    () => sortTasks(tasks.filter((t) => t.status === "completed")),
+    () => sortTasks(tasks.filter((t) => t.status === TASK_STATUS_COMPLETED)),
     [tasks],
   );
 
@@ -319,7 +432,7 @@ export default function App() {
           </div>
         )}
 
-        {pendingTasks.length === 0 && !showInput && (
+        {tasks.length === 0 && !showInput && (
           <div className="empty-state">{t("emptyState")}</div>
         )}
 
@@ -342,11 +455,44 @@ export default function App() {
                   onDelete={() => handleDelete(task.id)}
                   onEditStart={() => handleEditStart(task.id)}
                   onEditEnd={handleEditEnd}
+                  onSendToHold={(preset) => handleSendToHold(task, preset)}
                 />
               ))}
             </div>
           );
         })}
+
+        {onHoldTasks.length > 0 && (
+          <div className="on-hold-section">
+            <button
+              className="completed-header on-hold-header"
+              onClick={() => setOnHoldOpen((v) => !v)}
+            >
+              <ChevronRightIcon className={`chevron ${onHoldOpen ? "open" : ""}`} />
+              {t("onHoldSectionTitle", { count: onHoldTasks.length })}
+            </button>
+
+            {onHoldOpen && (
+              <div className="on-hold-items">
+                {onHoldTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    t={t}
+                    isEditing={editingId === task.id}
+                    isNewlyCreated={newlyCreatedTaskId === task.id}
+                    holdNote={formatHoldNote(task, locale, t)}
+                    onToggleComplete={() => handleResumeFromHold(task)}
+                    onUpdate={handleUpdate}
+                    onDelete={() => handleDelete(task.id)}
+                    onEditStart={() => handleEditStart(task.id)}
+                    onEditEnd={handleEditEnd}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {completedTasks.length > 0 && (
           <div className="completed-section">

@@ -7,6 +7,7 @@ export namespace main {
 	    priority: string;
 	    contact: string;
 	    order: number;
+	    holdUntil: string;
 	    createdAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -21,6 +22,7 @@ export namespace main {
 	        this.priority = source["priority"];
 	        this.contact = source["contact"];
 	        this.order = source["order"];
+	        this.holdUntil = source["holdUntil"];
 	        this.createdAt = source["createdAt"];
 	    }
 	}

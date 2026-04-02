@@ -63,3 +63,24 @@ export function GearIcon() {
     </svg>
   );
 }
+
+export function PostponeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
+      <circle cx="12" cy="12" r="8" />
+      <polyline points="12 8 12 12 15 14" />
+      <polyline points="7 4 5 4 5 6" />
+      <path d="M5 4a9 9 0 0 1 14.8 2" />
+    </svg>
+  );
+}
+
+export function MoreIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
