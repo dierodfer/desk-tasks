@@ -23,11 +23,25 @@ type HoldPreset = "tomorrow" | "indefinite" | "today-time";
 const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const PRIORITIES = ["high", "medium", "low"] as const;
-const MAX_NAME_LENGTH = 102;
+const MAX_NAME_LENGTH = 150;
 const MAX_CONTACT_LENGTH = 34;
 
 function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function getTaskNameFontSize(charCount: number): string {
+  const maxFontSize = 13;
+  const minFontSize = 10.5;
+  const shrinkStart = 38;
+  const shrinkEnd = MAX_NAME_LENGTH;
+
+  if (charCount <= shrinkStart) return `${maxFontSize}px`;
+  if (charCount >= shrinkEnd) return `${minFontSize}px`;
+
+  const ratio = (charCount - shrinkStart) / (shrinkEnd - shrinkStart);
+  const computed = maxFontSize - (maxFontSize - minFontSize) * ratio;
+  return `${computed.toFixed(2)}px`;
 }
 
 function getPriorityLabelKey(priority: string): TranslationKey {
@@ -73,7 +87,8 @@ export function TaskItem({
   const [isHoldTimePickerOpen, setIsHoldTimePickerOpen] = useState(false);
   const [holdTimeValue, setHoldTimeValue] = useState(getDefaultHoldTime);
   const [holdTimeError, setHoldTimeError] = useState("");
-  const editRef = useRef<HTMLInputElement>(null);
+  const nameEditRef = useRef<HTMLTextAreaElement>(null);
+  const contactEditRef = useRef<HTMLInputElement>(null);
   const priorityMenuRef = useRef<HTMLDivElement>(null);
   const holdMenuRef = useRef<HTMLDivElement>(null);
   const deleteConfirmRef = useRef<HTMLDivElement>(null);
@@ -84,15 +99,42 @@ export function TaskItem({
   const currentPriority = t(getPriorityLabelKey(task.priority));
   const displayedName = truncateText(task.name, MAX_NAME_LENGTH);
   const isNameTruncated = displayedName !== task.name;
+  const taskNameFontSize = getTaskNameFontSize(task.name.length);
   const displayedContact = truncateText(task.contact, MAX_CONTACT_LENGTH);
   const isContactTruncated = displayedContact !== task.contact;
 
+  const adjustNameEditorHeight = useCallback(() => {
+    const textarea = nameEditRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+
+    const computed = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
+    const maxHeight = lineHeight * 3;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, []);
+
   useEffect(() => {
-    if (editField) {
-      editRef.current?.focus();
-      editRef.current?.select();
+    if (editField === "name") {
+      nameEditRef.current?.focus();
+      nameEditRef.current?.select();
+      adjustNameEditorHeight();
     }
-  }, [editField]);
+    if (editField === "contact") {
+      contactEditRef.current?.focus();
+      contactEditRef.current?.select();
+    }
+  }, [editField, adjustNameEditorHeight]);
+
+  useEffect(() => {
+    if (editField === "name") {
+      adjustNameEditorHeight();
+    }
+  }, [editField, editValue, adjustNameEditorHeight]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -171,7 +213,7 @@ export function TaskItem({
   }, [onEditEnd]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") commitEdit();
+    if (e.key === "Enter" && !(editField === "name" && e.shiftKey)) commitEdit();
     else if (e.key === "Escape") cancelEdit();
   };
 
@@ -340,11 +382,12 @@ export function TaskItem({
 
       <div className="task-content">
         {editField === "name" ? (
-          <input
-            ref={editRef}
+          <textarea
+            ref={nameEditRef}
             className="inline-edit"
-            type="text"
+            rows={1}
             value={editValue}
+            style={{ fontSize: taskNameFontSize }}
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={commitEdit}
@@ -352,6 +395,7 @@ export function TaskItem({
         ) : (
           <div
             className={`task-name ${isCompleted ? "completed-text" : ""}`}
+            style={{ fontSize: taskNameFontSize }}
             onClick={() => startEdit("name")}
             title={isNameTruncated ? task.name : t("clickToEditName")}
           >
@@ -362,7 +406,7 @@ export function TaskItem({
         {editField === "contact" ? (
           <div className="task-meta">
             <input
-              ref={editRef}
+              ref={contactEditRef}
               className="inline-edit-small"
               type="text"
               placeholder={t("contactPlaceholder")}

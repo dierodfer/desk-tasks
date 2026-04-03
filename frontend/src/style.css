@@ -551,7 +551,7 @@ body {
 }
 
 .task-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -606,8 +606,13 @@ body {
 }
 
 .inline-edit {
+  display: block;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.35;
+  min-height: calc(1.35em + 4px);
   border-bottom: 1px solid var(--accent);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
 }
 

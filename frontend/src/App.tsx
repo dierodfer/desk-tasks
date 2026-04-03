@@ -10,6 +10,7 @@ import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
 import { CheckIcon, ChevronRightIcon, GearIcon } from "./components/Icons";
 import { useOutsideClick } from "./hooks/useOutsideClick";
+import { TaskModel } from "./models/TaskModel";
 import {
   createTranslator,
   detectInitialLocale,
@@ -18,7 +19,6 @@ import {
   LOCALE_STORAGE_KEY,
   type Locale,
   type TranslationKey,
-  type Translator,
 } from "./i18";
 
 declare const __APP_VERSION__: string;
@@ -34,8 +34,6 @@ const THEME_OPTIONS: Array<{ value: ThemeName; labelKey: TranslationKey }> = [
 ];
 
 const VALID_THEMES = new Set<string>(THEME_OPTIONS.map((o) => o.value));
-
-const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 const PRIORITY_SECTIONS: Array<{ key: "high" | "medium" | "low"; labelKey: TranslationKey }> = [
   { key: "high", labelKey: "priorityHigh" },
@@ -54,34 +52,6 @@ const TASK_STATUS_COMPLETED = "completed";
 const TASK_STATUS_ON_HOLD = "on_hold";
 
 const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function sortTasks(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    const pa = PRIORITY_ORDER[a.priority] ?? 2;
-    const pb = PRIORITY_ORDER[b.priority] ?? 2;
-    return pa !== pb ? pa - pb : a.order - b.order;
-  });
-}
-
-function sortOnHoldTasks(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    const aHasDate = a.holdUntil.trim().length > 0;
-    const bHasDate = b.holdUntil.trim().length > 0;
-    if (aHasDate && bHasDate) {
-      const ad = new Date(a.holdUntil).getTime();
-      const bd = new Date(b.holdUntil).getTime();
-      if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) {
-        return ad - bd;
-      }
-    }
-    if (aHasDate !== bHasDate) {
-      return aHasDate ? -1 : 1;
-    }
-    const pa = PRIORITY_ORDER[a.priority] ?? 2;
-    const pb = PRIORITY_ORDER[b.priority] ?? 2;
-    return pa !== pb ? pa - pb : a.order - b.order;
-  });
-}
 
 function getTomorrowAtEightAM(): Date {
   const result = new Date();
@@ -102,27 +72,6 @@ function parseTodayTimeInput(timeText: string): Date | null {
   const result = new Date();
   result.setHours(hours, minutes, 0, 0);
   return result;
-}
-
-function formatHoldNote(task: Task, locale: Locale, t: Translator): string {
-  if (task.holdUntil.trim().length === 0) {
-    return t("holdIndefiniteBadge");
-  }
-
-  const date = new Date(task.holdUntil);
-  if (Number.isNaN(date.getTime())) {
-    return t("holdIndefiniteBadge");
-  }
-
-  const localeTag = locale === "es" ? "es-ES" : "en-US";
-  const formatter = new Intl.DateTimeFormat(localeTag, {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  return t("holdUntilLabel", { date: formatter.format(date) });
 }
 
 const noop = () => {};
@@ -287,15 +236,15 @@ export default function App() {
   const handleEditEnd = useCallback(() => setEditingId(null), []);
 
   const pendingTasks = useMemo(
-    () => sortTasks(tasks.filter((t) => t.status === TASK_STATUS_PENDING)),
+    () => TaskModel.sortByPriorityAndOrder(tasks.filter((t) => t.status === TASK_STATUS_PENDING)),
     [tasks],
   );
   const onHoldTasks = useMemo(
-    () => sortOnHoldTasks(tasks.filter((t) => t.status === TASK_STATUS_ON_HOLD)),
+    () => TaskModel.sortOnHold(tasks.filter((t) => t.status === TASK_STATUS_ON_HOLD)),
     [tasks],
   );
   const completedTasks = useMemo(
-    () => sortTasks(tasks.filter((t) => t.status === TASK_STATUS_COMPLETED)),
+    () => TaskModel.sortByPriorityAndOrder(tasks.filter((t) => t.status === TASK_STATUS_COMPLETED)),
     [tasks],
   );
 
@@ -481,7 +430,7 @@ export default function App() {
                     t={t}
                     isEditing={editingId === task.id}
                     isNewlyCreated={newlyCreatedTaskId === task.id}
-                    holdNote={formatHoldNote(task, locale, t)}
+                    holdNote={TaskModel.formatHoldNote(task, locale, t)}
                     onToggleComplete={() => handleResumeFromHold(task)}
                     onUpdate={handleUpdate}
                     onDelete={() => handleDelete(task.id)}
