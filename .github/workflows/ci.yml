@@ -5,6 +5,10 @@ on:
     types: [opened, synchronize, reopened]
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -26,6 +30,15 @@ jobs:
         run: |
           go mod download
           go mod verify
+
+      - name: Prepare embedded frontend assets for static analysis
+        run: |
+          mkdir -p frontend/dist
+          if [ ! -f frontend/dist/index.html ]; then
+            cat > frontend/dist/index.html <<'EOF'
+            <!doctype html><title>placeholder</title>
+            EOF
+          fi
 
       - name: Vet
         run: go vet ./...
