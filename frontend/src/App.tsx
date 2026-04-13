@@ -71,6 +71,10 @@ function parseTodayTimeInput(timeText: string): Date | null {
   }
   const result = new Date();
   result.setHours(hours, minutes, 0, 0);
+  // Interpret selected time as the next reactivation time.
+  if (result.getTime() <= Date.now()) {
+    result.setDate(result.getDate() + 1);
+  }
   return result;
 }
 
@@ -216,9 +220,6 @@ export default function App() {
     } else if (preset === "today-time") {
       holdDate = parseTodayTimeInput(timeText ?? "");
       if (!holdDate) {
-        return;
-      }
-      if (holdDate.getTime() <= Date.now()) {
         return;
       }
     }
@@ -404,7 +405,7 @@ export default function App() {
                   onDelete={() => handleDelete(task.id)}
                   onEditStart={() => handleEditStart(task.id)}
                   onEditEnd={handleEditEnd}
-                  onSendToHold={(preset) => handleSendToHold(task, preset)}
+                  onSendToHold={(preset, timeText) => handleSendToHold(task, preset, timeText)}
                 />
               ))}
             </div>

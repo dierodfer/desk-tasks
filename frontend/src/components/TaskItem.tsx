@@ -293,14 +293,6 @@ export function TaskItem({
       return;
     }
 
-    const [hoursText, minutesText] = normalized.split(":");
-    const date = new Date();
-    date.setHours(Number(hoursText), Number(minutesText), 0, 0);
-    if (date.getTime() <= Date.now()) {
-      setHoldTimeError(t("holdPastTime"));
-      return;
-    }
-
     setIsHoldMenuOpen(false);
     setIsHoldTimePickerOpen(false);
     setHoldTimeError("");
