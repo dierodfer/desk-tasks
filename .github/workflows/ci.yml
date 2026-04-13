@@ -35,9 +35,7 @@ jobs:
         run: |
           mkdir -p frontend/dist
           if [ ! -f frontend/dist/index.html ]; then
-            cat > frontend/dist/index.html <<'EOF'
-            <!doctype html><title>placeholder</title>
-            EOF
+            printf '%s\n' '<!doctype html><title>placeholder</title>' > frontend/dist/index.html
           fi
 
       - name: Vet
