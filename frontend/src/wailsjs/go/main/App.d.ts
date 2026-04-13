@@ -8,6 +8,7 @@ export interface Task {
   priority: string;
   contact: string;
   order: number;
+  holdUntil: string;
   createdAt: string;
 }
 

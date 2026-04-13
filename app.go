@@ -19,6 +19,7 @@ var tasksBucket = []byte("tasks")
 const (
 	taskStatusPending   = "pending"
 	taskStatusCompleted = "completed"
+	taskStatusOnHold    = "on_hold"
 
 	taskPriorityLow    = "low"
 	taskPriorityMedium = "medium"
@@ -29,10 +30,11 @@ const (
 type Task struct {
 	ID        uint64 `json:"id"`
 	Name      string `json:"name"`
-	Status    string `json:"status"`   // "pending" or "completed"
+	Status    string `json:"status"`   // "pending", "completed" or "on_hold"
 	Priority  string `json:"priority"` // "low", "medium", "high"
 	Contact   string `json:"contact"`
 	Order     uint64 `json:"order"` // insertion order for stable sort
+	HoldUntil string `json:"holdUntil"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -107,11 +109,36 @@ func normalizePriority(priority string) string {
 
 func parseStatus(status string) (string, bool) {
 	switch status {
-	case taskStatusPending, taskStatusCompleted:
+	case taskStatusPending, taskStatusCompleted, taskStatusOnHold:
 		return status, true
 	default:
 		return "", false
 	}
+}
+
+func parseHoldUntil(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", true
+	}
+	ts, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return "", false
+	}
+	return ts.UTC().Format(time.RFC3339), true
+}
+
+func shouldReleaseHold(now time.Time, holdUntil string) bool {
+	holdUntil = strings.TrimSpace(holdUntil)
+	if holdUntil == "" {
+		return false
+	}
+	until, err := time.Parse(time.RFC3339, holdUntil)
+	if err != nil {
+		// Invalid data should not block the task forever.
+		return true
+	}
+	return !until.After(now)
 }
 
 // CreateTask creates a new task with the given name.
@@ -136,6 +163,7 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 			Priority:  normalizePriority(priority),
 			Contact:   "",
 			Order:     id,
+			HoldUntil: "",
 			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		}
 		buf, err := json.Marshal(task)
@@ -150,12 +178,24 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 // GetAllTasks returns all tasks.
 func (a *App) GetAllTasks() ([]Task, error) {
 	var tasks []Task
-	err := a.db.View(func(tx *bolt.Tx) error {
+	now := time.Now().UTC()
+	err := a.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(tasksBucket)
 		return b.ForEach(func(k, v []byte) error {
 			var t Task
 			if err := json.Unmarshal(v, &t); err != nil {
 				return err
+			}
+			if t.Status == taskStatusOnHold && shouldReleaseHold(now, t.HoldUntil) {
+				t.Status = taskStatusPending
+				t.HoldUntil = ""
+				buf, err := json.Marshal(t)
+				if err != nil {
+					return err
+				}
+				if err := b.Put(k, buf); err != nil {
+					return err
+				}
 			}
 			tasks = append(tasks, t)
 			return nil
@@ -189,6 +229,14 @@ func (a *App) UpdateTask(task Task) (Task, error) {
 		}
 		if priority, ok := parsePriority(task.Priority); ok {
 			current.Priority = priority
+		}
+		if holdUntil, ok := parseHoldUntil(task.HoldUntil); ok {
+			current.HoldUntil = holdUntil
+		} else if task.HoldUntil != "" {
+			return fmt.Errorf("invalid holdUntil: expected RFC3339")
+		}
+		if current.Status != taskStatusOnHold {
+			current.HoldUntil = ""
 		}
 		// Contact can be set to empty intentionally, so always update it.
 		current.Contact = task.Contact
