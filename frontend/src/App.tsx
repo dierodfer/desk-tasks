@@ -10,7 +10,8 @@ import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
 import { CheckIcon, ChevronRightIcon, CloseIcon, GearIcon } from "./components/Icons";
 import { useOutsideClick } from "./hooks/useOutsideClick";
-import { TaskModel } from "./models/TaskModel";
+import { TaskModel, MAX_NAME_LENGTH } from "./models/TaskModel";
+import { getTomorrowAtEightAM, parseTodayTimeInput } from "./lib/holdTime";
 import {
   createTranslator,
   detectInitialLocale,
@@ -50,33 +51,6 @@ const NEW_TASK_PRIORITIES: Array<{ value: "high" | "medium" | "low"; labelKey: T
 const TASK_STATUS_PENDING = "pending";
 const TASK_STATUS_COMPLETED = "completed";
 const TASK_STATUS_ON_HOLD = "on_hold";
-
-const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function getTomorrowAtEightAM(): Date {
-  const result = new Date();
-  result.setDate(result.getDate() + 1);
-  result.setHours(8, 0, 0, 0);
-  return result;
-}
-
-function parseTodayTimeInput(timeText: string): Date | null {
-  const normalized = timeText.trim();
-  const match = HOLD_TIME_REGEX.exec(normalized);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
-    return null;
-  }
-  const result = new Date();
-  result.setHours(hours, minutes, 0, 0);
-  // Interpret selected time as the next reactivation time.
-  if (result.getTime() <= Date.now()) {
-    result.setDate(result.getDate() + 1);
-  }
-  return result;
-}
 
 const noop = () => {};
 
@@ -143,6 +117,20 @@ export default function App() {
       void loadTasks();
     }, 60_000);
     return () => window.clearInterval(intervalId);
+  }, [loadTasks]);
+
+  useEffect(() => {
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadTasks();
+      }
+    };
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [loadTasks]);
 
   useEffect(() => {
@@ -435,6 +423,7 @@ export default function App() {
               type="text"
               placeholder={t("taskNamePlaceholder")}
               value={inputValue}
+              maxLength={MAX_NAME_LENGTH}
               disabled={isCreatingTask}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleInputKeyDown}
