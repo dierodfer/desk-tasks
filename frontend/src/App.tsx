@@ -8,9 +8,10 @@ import {
 } from "./wailsjs/go/main/App";
 import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
-import { CheckIcon, ChevronRightIcon, GearIcon } from "./components/Icons";
+import { CheckIcon, ChevronRightIcon, CloseIcon, GearIcon } from "./components/Icons";
 import { useOutsideClick } from "./hooks/useOutsideClick";
-import { TaskModel } from "./models/TaskModel";
+import { TaskModel, MAX_NAME_LENGTH } from "./models/TaskModel";
+import { getTomorrowAtEightAM, parseTodayTimeInput } from "./lib/holdTime";
 import {
   createTranslator,
   detectInitialLocale,
@@ -51,33 +52,6 @@ const TASK_STATUS_PENDING = "pending";
 const TASK_STATUS_COMPLETED = "completed";
 const TASK_STATUS_ON_HOLD = "on_hold";
 
-const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function getTomorrowAtEightAM(): Date {
-  const result = new Date();
-  result.setDate(result.getDate() + 1);
-  result.setHours(8, 0, 0, 0);
-  return result;
-}
-
-function parseTodayTimeInput(timeText: string): Date | null {
-  const normalized = timeText.trim();
-  const match = HOLD_TIME_REGEX.exec(normalized);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
-    return null;
-  }
-  const result = new Date();
-  result.setHours(hours, minutes, 0, 0);
-  // Interpret selected time as the next reactivation time.
-  if (result.getTime() <= Date.now()) {
-    result.setDate(result.getDate() + 1);
-  }
-  return result;
-}
-
 const noop = () => {};
 
 const appVersion =
@@ -98,18 +72,43 @@ export default function App() {
   const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [newlyCreatedTaskId, setNewlyCreatedTaskId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const createAnimationTimeoutRef = useRef<number | null>(null);
+  const errorTimeoutRef = useRef<number | null>(null);
   const t = useMemo(() => createTranslator(locale), [locale]);
 
   const closeThemeMenu = useCallback(() => setThemeMenuOpen(false), []);
   useOutsideClick(settingsMenuRef, themeMenuOpen, closeThemeMenu);
 
-  const loadTasks = useCallback(async () => {
-    const all = await GetAllTasks();
-    setTasks(all || []);
+  const showError = useCallback((message: string) => {
+    setErrorMessage(message);
+    if (errorTimeoutRef.current) {
+      window.clearTimeout(errorTimeoutRef.current);
+    }
+    errorTimeoutRef.current = window.setTimeout(() => {
+      setErrorMessage(null);
+      errorTimeoutRef.current = null;
+    }, 5000);
   }, []);
+
+  const dismissError = useCallback(() => {
+    if (errorTimeoutRef.current) {
+      window.clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    setErrorMessage(null);
+  }, []);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const all = await GetAllTasks();
+      setTasks(all || []);
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
@@ -118,6 +117,20 @@ export default function App() {
       void loadTasks();
     }, 60_000);
     return () => window.clearInterval(intervalId);
+  }, [loadTasks]);
+
+  useEffect(() => {
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadTasks();
+      }
+    };
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [loadTasks]);
 
   useEffect(() => {
@@ -153,10 +166,13 @@ export default function App() {
       if (createAnimationTimeoutRef.current) {
         window.clearTimeout(createAnimationTimeoutRef.current);
       }
+      if (errorTimeoutRef.current) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
 
-  const handleCreate = async () => {
+  const handleCreate = useCallback(async () => {
     if (isCreatingTask) return;
     const name = inputValue.trim();
     if (!name) return;
@@ -175,10 +191,12 @@ export default function App() {
       setInputValue("");
       setNewTaskPriority("low");
       setShowInput(false);
+    } catch {
+      showError(t("errorGeneric"));
     } finally {
       setIsCreatingTask(false);
     }
-  };
+  }, [isCreatingTask, inputValue, newTaskPriority, showError, t]);
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleCreate();
@@ -190,27 +208,43 @@ export default function App() {
   };
 
   const handleUpdate = useCallback(async (task: Task) => {
-    const updated = await UpdateTask(task);
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask(task);
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleDelete = useCallback(async (id: number) => {
-    await DeleteTask(id);
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    try {
+      await DeleteTask(id);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleToggleComplete = useCallback(async (task: Task) => {
     const newStatus = task.status === TASK_STATUS_PENDING
       ? TASK_STATUS_COMPLETED
       : TASK_STATUS_PENDING;
-    const updated = await UpdateTask({ ...task, status: newStatus, holdUntil: "" });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({ ...task, status: newStatus, holdUntil: "" });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleResumeFromHold = useCallback(async (task: Task) => {
-    const updated = await UpdateTask({ ...task, status: TASK_STATUS_PENDING, holdUntil: "" });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({ ...task, status: TASK_STATUS_PENDING, holdUntil: "" });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleSendToHold = useCallback(async (task: Task, preset: HoldPreset, timeText?: string) => {
     let holdDate: Date | null = null;
@@ -225,13 +259,17 @@ export default function App() {
     }
 
     const holdUntil = holdDate ? holdDate.toISOString() : "";
-    const updated = await UpdateTask({
-      ...task,
-      status: TASK_STATUS_ON_HOLD,
-      holdUntil,
-    });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({
+        ...task,
+        status: TASK_STATUS_ON_HOLD,
+        holdUntil,
+      });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleEditStart = useCallback((id: number) => setEditingId(id), []);
   const handleEditEnd = useCallback(() => setEditingId(null), []);
@@ -259,12 +297,16 @@ export default function App() {
   );
 
   const handleAddTaskClick = useCallback(() => {
-    if (isCreatingTask || showInput) return;
+    if (isCreatingTask) return;
+    if (showInput) {
+      void handleCreate();
+      return;
+    }
     setShowInput(true);
     setEditingId(null);
-  }, [isCreatingTask, showInput]);
+  }, [isCreatingTask, showInput, handleCreate]);
 
-  const addTaskLabel = isCreatingTask || showInput
+  const addTaskLabel = isCreatingTask
     ? t("taskAlreadyCreating")
     : t("addTask");
 
@@ -342,6 +384,19 @@ export default function App() {
         </div>
       </div>
 
+      {errorMessage && (
+        <div className="error-banner" role="alert">
+          <span>{errorMessage}</span>
+          <button
+            className="error-banner-dismiss"
+            onClick={dismissError}
+            aria-label={t("dismissError")}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
+
       <div className="task-list">
         {showInput && (
           <div className="inline-input-row">
@@ -368,6 +423,7 @@ export default function App() {
               type="text"
               placeholder={t("taskNamePlaceholder")}
               value={inputValue}
+              maxLength={MAX_NAME_LENGTH}
               disabled={isCreatingTask}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleInputKeyDown}

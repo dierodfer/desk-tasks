@@ -1,6 +1,9 @@
 import type { Task } from "../wailsjs/go/main/App";
 import type { Locale, Translator } from "../i18";
 
+export const MAX_NAME_LENGTH = 150;
+export const MAX_CONTACT_LENGTH = 34;
+
 const PRIORITY_ORDER: Readonly<Record<string, number>> = Object.freeze({
     high: 0,
     medium: 1,

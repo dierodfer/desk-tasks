@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { Task } from "../wailsjs/go/main/App";
 import { useOutsideClick } from "../hooks/useOutsideClick";
 import { CheckIcon, UserIcon, CloseIcon, ChevronDownIcon, PostponeIcon, MoreIcon } from "./Icons";
+import { MAX_NAME_LENGTH, MAX_CONTACT_LENGTH } from "../models/TaskModel";
 import type { TranslationKey, Translator } from "../i18";
 
 interface TaskItemProps {
@@ -23,8 +24,6 @@ type HoldPreset = "tomorrow" | "indefinite" | "today-time";
 const HOLD_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const PRIORITIES = ["high", "medium", "low"] as const;
-const MAX_NAME_LENGTH = 150;
-const MAX_CONTACT_LENGTH = 34;
 
 function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
@@ -334,8 +333,8 @@ export function TaskItem({
         className={`task-check ${isCompleted ? "checked" : ""}`}
         onClick={handleToggleStatus}
         disabled={isPendingTransition}
-        title={isCompleted ? t("markPending") : isOnHold ? t("restoreFromHold") : t("markCompleted")}
-        aria-label={isCompleted ? t("markPending") : isOnHold ? t("restoreFromHold") : t("markCompleted")}
+        title={isCompleted ? t("markPending") : isOnHold ? t("moveToPending") : t("markCompleted")}
+        aria-label={isCompleted ? t("markPending") : isOnHold ? t("moveToPending") : t("markCompleted")}
       >
         {isCompleted && <CheckIcon />}
       </button>
@@ -379,6 +378,7 @@ export function TaskItem({
             className="inline-edit"
             rows={1}
             value={editValue}
+            maxLength={MAX_NAME_LENGTH}
             style={{ fontSize: taskNameFontSize }}
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -403,6 +403,7 @@ export function TaskItem({
               type="text"
               placeholder={t("contactPlaceholder")}
               value={editValue}
+              maxLength={MAX_CONTACT_LENGTH}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onBlur={commitEdit}
@@ -432,7 +433,7 @@ export function TaskItem({
             className={`action-menu-btn ${isActionMenuOpen ? "active" : ""}`}
             onClick={toggleActionMenu}
             aria-expanded={isActionMenuOpen}
-            aria-label={t("taskActions") ?? "Actions"}
+            aria-label={t("taskActions")}
           >
             <MoreIcon className="action-menu-icon" />
           </button>

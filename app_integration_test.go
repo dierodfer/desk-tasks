@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,89 @@ func TestUpdateTask(t *testing.T) {
 	}
 	if updated.Status != taskStatusCompleted {
 		t.Fatalf("expected status %q, got %q", taskStatusCompleted, updated.Status)
+	}
+}
+
+func TestUpdateTaskWithBlankNameKeepsExisting(t *testing.T) {
+	app := newTestApp(t)
+
+	task, err := app.CreateTask("original name", "low")
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	updated, err := app.UpdateTask(Task{
+		ID:       task.ID,
+		Name:     "   ",
+		Status:   taskStatusPending,
+		Priority: taskPriorityLow,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTask failed: %v", err)
+	}
+	if updated.Name != "original name" {
+		t.Fatalf("expected name to remain 'original name', got %q", updated.Name)
+	}
+}
+
+func TestUpdateTaskNameTooLongFails(t *testing.T) {
+	app := newTestApp(t)
+
+	task, err := app.CreateTask("original name", "low")
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	_, err = app.UpdateTask(Task{
+		ID:   task.ID,
+		Name: strings.Repeat("a", maxTaskNameLength+1),
+	})
+	if err == nil {
+		t.Fatal("expected error for name exceeding max length, got nil")
+	}
+}
+
+func TestUpdateTaskContactTooLongFails(t *testing.T) {
+	app := newTestApp(t)
+
+	task, err := app.CreateTask("original name", "low")
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	_, err = app.UpdateTask(Task{
+		ID:      task.ID,
+		Contact: strings.Repeat("a", maxContactLength+1),
+	})
+	if err == nil {
+		t.Fatal("expected error for contact exceeding max length, got nil")
+	}
+}
+
+func TestUpdateTaskInvalidHoldUntilFails(t *testing.T) {
+	app := newTestApp(t)
+
+	task, err := app.CreateTask("to hold", "low")
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	_, err = app.UpdateTask(Task{
+		ID:        task.ID,
+		Status:    taskStatusOnHold,
+		HoldUntil: "not-a-valid-timestamp",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid holdUntil, got nil")
+	}
+}
+
+func TestCreateTaskNameTooLongFails(t *testing.T) {
+	app := newTestApp(t)
+
+	_, err := app.CreateTask(strings.Repeat("a", maxTaskNameLength+1), "low")
+	if err == nil {
+		t.Fatal("expected error for name exceeding max length, got nil")
 	}
 }
 

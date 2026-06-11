@@ -24,6 +24,9 @@ const (
 	taskPriorityLow    = "low"
 	taskPriorityMedium = "medium"
 	taskPriorityHigh   = "high"
+
+	maxTaskNameLength = 150
+	maxContactLength  = 34
 )
 
 // Task represents a single task item.
@@ -58,13 +61,15 @@ func (a *App) startup(ctx context.Context) {
 	}
 	dbDir := filepath.Join(dataDir, "desk-tasks")
 	if err := os.MkdirAll(dbDir, 0750); err != nil {
-		panic(fmt.Sprintf("failed to create data dir: %v", err))
+		a.fatalStartupError(fmt.Sprintf("Failed to create data directory:\n%v", err))
+		return
 	}
 
 	dbPath := filepath.Join(dbDir, "tasks.db")
 	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		panic(fmt.Sprintf("failed to open database: %v", err))
+		a.fatalStartupError(fmt.Sprintf("Failed to open database:\n%v", err))
+		return
 	}
 	a.db = db
 
@@ -74,13 +79,27 @@ func (a *App) startup(ctx context.Context) {
 		return err
 	})
 	if err != nil {
-		panic(fmt.Sprintf("failed to create bucket: %v", err))
+		a.fatalStartupError(fmt.Sprintf("Failed to initialize database:\n%v", err))
+		return
 	}
+}
+
+// fatalStartupError shows the user a native error dialog explaining why the
+// app cannot start, then exits the process.
+func (a *App) fatalStartupError(message string) {
+	_, _ = runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:    runtime.ErrorDialog,
+		Title:   "Desk Tasks - Startup error",
+		Message: message,
+	})
+	os.Exit(1)
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	if a.db != nil {
-		a.db.Close()
+		if err := a.db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+		}
 	}
 }
 
@@ -147,6 +166,9 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 	if name == "" {
 		return Task{}, fmt.Errorf("task name cannot be empty")
 	}
+	if len(name) > maxTaskNameLength {
+		return Task{}, fmt.Errorf("task name exceeds maximum length of %d characters", maxTaskNameLength)
+	}
 
 	var task Task
 	err := a.db.Update(func(tx *bolt.Tx) error {
@@ -175,13 +197,15 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 	return task, err
 }
 
-// GetAllTasks returns all tasks.
+// GetAllTasks returns all tasks, releasing any holds that have expired.
 func (a *App) GetAllTasks() ([]Task, error) {
 	var tasks []Task
+	var released []Task
 	now := time.Now().UTC()
-	err := a.db.Update(func(tx *bolt.Tx) error {
+
+	err := a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(tasksBucket)
-		return b.ForEach(func(k, v []byte) error {
+		return b.ForEach(func(_, v []byte) error {
 			var t Task
 			if err := json.Unmarshal(v, &t); err != nil {
 				return err
@@ -189,22 +213,39 @@ func (a *App) GetAllTasks() ([]Task, error) {
 			if t.Status == taskStatusOnHold && shouldReleaseHold(now, t.HoldUntil) {
 				t.Status = taskStatusPending
 				t.HoldUntil = ""
-				buf, err := json.Marshal(t)
-				if err != nil {
-					return err
-				}
-				if err := b.Put(k, buf); err != nil {
-					return err
-				}
+				released = append(released, t)
 			}
 			tasks = append(tasks, t)
 			return nil
 		})
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(released) > 0 {
+		err = a.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket(tasksBucket)
+			for _, t := range released {
+				buf, err := json.Marshal(t)
+				if err != nil {
+					return err
+				}
+				if err := b.Put(itob(t.ID), buf); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if tasks == nil {
 		tasks = []Task{}
 	}
-	return tasks, err
+	return tasks, nil
 }
 
 // UpdateTask updates an existing task. Only provided fields are changed.
@@ -220,9 +261,14 @@ func (a *App) UpdateTask(task Task) (Task, error) {
 		if err := json.Unmarshal(existing, &current); err != nil {
 			return err
 		}
-		// Update only the fields that are explicitly set.
-		if task.Name != "" {
-			current.Name = task.Name
+		// Task names are required and can never be cleared, so a blank Name
+		// leaves the current name unchanged. A non-blank Name is trimmed and
+		// length-validated the same way as CreateTask.
+		if name := strings.TrimSpace(task.Name); name != "" {
+			if len(name) > maxTaskNameLength {
+				return fmt.Errorf("task name exceeds maximum length of %d characters", maxTaskNameLength)
+			}
+			current.Name = name
 		}
 		if status, ok := parseStatus(task.Status); ok {
 			current.Status = status
@@ -239,7 +285,11 @@ func (a *App) UpdateTask(task Task) (Task, error) {
 			current.HoldUntil = ""
 		}
 		// Contact can be set to empty intentionally, so always update it.
-		current.Contact = task.Contact
+		contact := strings.TrimSpace(task.Contact)
+		if len(contact) > maxContactLength {
+			return fmt.Errorf("contact exceeds maximum length of %d characters", maxContactLength)
+		}
+		current.Contact = contact
 		updated = current
 		buf, err := json.Marshal(updated)
 		if err != nil {

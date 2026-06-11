@@ -221,6 +221,47 @@ body {
   --wails-draggable: no-drag;
 }
 
+/* Error banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--high) 35%, transparent);
+  background: color-mix(in srgb, var(--high) 12%, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+  animation: app-enter 0.2s ease-out both;
+}
+
+.error-banner-dismiss {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.error-banner-dismiss:hover {
+  background: color-mix(in srgb, var(--high) 18%, transparent);
+  color: var(--text);
+}
+
+.error-banner-dismiss svg {
+  width: 12px;
+  height: 12px;
+}
+
 .settings-btn {
   width: 36px;
   height: 36px;
