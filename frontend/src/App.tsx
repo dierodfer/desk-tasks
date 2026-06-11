@@ -156,7 +156,7 @@ export default function App() {
     };
   }, []);
 
-  const handleCreate = async () => {
+  const handleCreate = useCallback(async () => {
     if (isCreatingTask) return;
     const name = inputValue.trim();
     if (!name) return;
@@ -178,7 +178,7 @@ export default function App() {
     } finally {
       setIsCreatingTask(false);
     }
-  };
+  }, [isCreatingTask, inputValue, newTaskPriority]);
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleCreate();
@@ -259,12 +259,16 @@ export default function App() {
   );
 
   const handleAddTaskClick = useCallback(() => {
-    if (isCreatingTask || showInput) return;
+    if (isCreatingTask) return;
+    if (showInput) {
+      void handleCreate();
+      return;
+    }
     setShowInput(true);
     setEditingId(null);
-  }, [isCreatingTask, showInput]);
+  }, [isCreatingTask, showInput, handleCreate]);
 
-  const addTaskLabel = isCreatingTask || showInput
+  const addTaskLabel = isCreatingTask
     ? t("taskAlreadyCreating")
     : t("addTask");
 
