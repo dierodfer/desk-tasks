@@ -80,7 +80,9 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	if a.db != nil {
-		a.db.Close()
+		if err := a.db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+		}
 	}
 }
 
@@ -175,13 +177,15 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 	return task, err
 }
 
-// GetAllTasks returns all tasks.
+// GetAllTasks returns all tasks, releasing any holds that have expired.
 func (a *App) GetAllTasks() ([]Task, error) {
 	var tasks []Task
+	var released []Task
 	now := time.Now().UTC()
-	err := a.db.Update(func(tx *bolt.Tx) error {
+
+	err := a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(tasksBucket)
-		return b.ForEach(func(k, v []byte) error {
+		return b.ForEach(func(_, v []byte) error {
 			var t Task
 			if err := json.Unmarshal(v, &t); err != nil {
 				return err
@@ -189,22 +193,39 @@ func (a *App) GetAllTasks() ([]Task, error) {
 			if t.Status == taskStatusOnHold && shouldReleaseHold(now, t.HoldUntil) {
 				t.Status = taskStatusPending
 				t.HoldUntil = ""
-				buf, err := json.Marshal(t)
-				if err != nil {
-					return err
-				}
-				if err := b.Put(k, buf); err != nil {
-					return err
-				}
+				released = append(released, t)
 			}
 			tasks = append(tasks, t)
 			return nil
 		})
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(released) > 0 {
+		err = a.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket(tasksBucket)
+			for _, t := range released {
+				buf, err := json.Marshal(t)
+				if err != nil {
+					return err
+				}
+				if err := b.Put(itob(t.ID), buf); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if tasks == nil {
 		tasks = []Task{}
 	}
-	return tasks, err
+	return tasks, nil
 }
 
 // UpdateTask updates an existing task. Only provided fields are changed.

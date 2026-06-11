@@ -334,8 +334,8 @@ export function TaskItem({
         className={`task-check ${isCompleted ? "checked" : ""}`}
         onClick={handleToggleStatus}
         disabled={isPendingTransition}
-        title={isCompleted ? t("markPending") : isOnHold ? t("restoreFromHold") : t("markCompleted")}
-        aria-label={isCompleted ? t("markPending") : isOnHold ? t("restoreFromHold") : t("markCompleted")}
+        title={isCompleted ? t("markPending") : isOnHold ? t("moveToPending") : t("markCompleted")}
+        aria-label={isCompleted ? t("markPending") : isOnHold ? t("moveToPending") : t("markCompleted")}
       >
         {isCompleted && <CheckIcon />}
       </button>
@@ -432,7 +432,7 @@ export function TaskItem({
             className={`action-menu-btn ${isActionMenuOpen ? "active" : ""}`}
             onClick={toggleActionMenu}
             aria-expanded={isActionMenuOpen}
-            aria-label={t("taskActions") ?? "Actions"}
+            aria-label={t("taskActions")}
           >
             <MoreIcon className="action-menu-icon" />
           </button>

@@ -8,7 +8,7 @@ import {
 } from "./wailsjs/go/main/App";
 import type { Task } from "./wailsjs/go/main/App";
 import { TaskItem } from "./components/TaskItem";
-import { CheckIcon, ChevronRightIcon, GearIcon } from "./components/Icons";
+import { CheckIcon, ChevronRightIcon, CloseIcon, GearIcon } from "./components/Icons";
 import { useOutsideClick } from "./hooks/useOutsideClick";
 import { TaskModel } from "./models/TaskModel";
 import {
@@ -98,18 +98,43 @@ export default function App() {
   const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [newlyCreatedTaskId, setNewlyCreatedTaskId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const createAnimationTimeoutRef = useRef<number | null>(null);
+  const errorTimeoutRef = useRef<number | null>(null);
   const t = useMemo(() => createTranslator(locale), [locale]);
 
   const closeThemeMenu = useCallback(() => setThemeMenuOpen(false), []);
   useOutsideClick(settingsMenuRef, themeMenuOpen, closeThemeMenu);
 
-  const loadTasks = useCallback(async () => {
-    const all = await GetAllTasks();
-    setTasks(all || []);
+  const showError = useCallback((message: string) => {
+    setErrorMessage(message);
+    if (errorTimeoutRef.current) {
+      window.clearTimeout(errorTimeoutRef.current);
+    }
+    errorTimeoutRef.current = window.setTimeout(() => {
+      setErrorMessage(null);
+      errorTimeoutRef.current = null;
+    }, 5000);
   }, []);
+
+  const dismissError = useCallback(() => {
+    if (errorTimeoutRef.current) {
+      window.clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    setErrorMessage(null);
+  }, []);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const all = await GetAllTasks();
+      setTasks(all || []);
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
@@ -153,6 +178,9 @@ export default function App() {
       if (createAnimationTimeoutRef.current) {
         window.clearTimeout(createAnimationTimeoutRef.current);
       }
+      if (errorTimeoutRef.current) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -175,10 +203,12 @@ export default function App() {
       setInputValue("");
       setNewTaskPriority("low");
       setShowInput(false);
+    } catch {
+      showError(t("errorGeneric"));
     } finally {
       setIsCreatingTask(false);
     }
-  }, [isCreatingTask, inputValue, newTaskPriority]);
+  }, [isCreatingTask, inputValue, newTaskPriority, showError, t]);
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleCreate();
@@ -190,27 +220,43 @@ export default function App() {
   };
 
   const handleUpdate = useCallback(async (task: Task) => {
-    const updated = await UpdateTask(task);
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask(task);
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleDelete = useCallback(async (id: number) => {
-    await DeleteTask(id);
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    try {
+      await DeleteTask(id);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleToggleComplete = useCallback(async (task: Task) => {
     const newStatus = task.status === TASK_STATUS_PENDING
       ? TASK_STATUS_COMPLETED
       : TASK_STATUS_PENDING;
-    const updated = await UpdateTask({ ...task, status: newStatus, holdUntil: "" });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({ ...task, status: newStatus, holdUntil: "" });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleResumeFromHold = useCallback(async (task: Task) => {
-    const updated = await UpdateTask({ ...task, status: TASK_STATUS_PENDING, holdUntil: "" });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({ ...task, status: TASK_STATUS_PENDING, holdUntil: "" });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleSendToHold = useCallback(async (task: Task, preset: HoldPreset, timeText?: string) => {
     let holdDate: Date | null = null;
@@ -225,13 +271,17 @@ export default function App() {
     }
 
     const holdUntil = holdDate ? holdDate.toISOString() : "";
-    const updated = await UpdateTask({
-      ...task,
-      status: TASK_STATUS_ON_HOLD,
-      holdUntil,
-    });
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }, []);
+    try {
+      const updated = await UpdateTask({
+        ...task,
+        status: TASK_STATUS_ON_HOLD,
+        holdUntil,
+      });
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      showError(t("errorGeneric"));
+    }
+  }, [showError, t]);
 
   const handleEditStart = useCallback((id: number) => setEditingId(id), []);
   const handleEditEnd = useCallback(() => setEditingId(null), []);
@@ -345,6 +395,19 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="error-banner" role="alert">
+          <span>{errorMessage}</span>
+          <button
+            className="error-banner-dismiss"
+            onClick={dismissError}
+            aria-label={t("dismissError")}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
 
       <div className="task-list">
         {showInput && (

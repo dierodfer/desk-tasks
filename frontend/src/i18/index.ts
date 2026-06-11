@@ -41,7 +41,6 @@ const ES_MESSAGES = {
   holdPastTime: "La hora seleccionada ya ha pasado.",
   holdUntilLabel: "Hasta {date}",
   holdIndefiniteBadge: "Indefinida",
-  restoreFromHold: "Quitar de reposo",
   moveToPending: "Mover a pendiente",
   completedSectionTitle: "Completadas ({count})",
   markPending: "Marcar pendiente",
@@ -61,6 +60,8 @@ const ES_MESSAGES = {
   exitApp: "Salir",
   taskActions: "Acciones",
   postponeTooltip: "Aplazar",
+  errorGeneric: "No se pudo completar la accion. Intentalo de nuevo.",
+  dismissError: "Cerrar aviso",
 };
 
 export type TranslationKey = keyof typeof ES_MESSAGES;
@@ -105,7 +106,6 @@ const EN_MESSAGES: MessageCatalog = {
   holdPastTime: "The selected time has already passed.",
   holdUntilLabel: "Until {date}",
   holdIndefiniteBadge: "Indefinite",
-  restoreFromHold: "Remove from hold",
   moveToPending: "Move to pending",
   completedSectionTitle: "Completed ({count})",
   markPending: "Mark pending",
@@ -125,6 +125,8 @@ const EN_MESSAGES: MessageCatalog = {
   exitApp: "Exit",
   taskActions: "Actions",
   postponeTooltip: "Postpone",
+  errorGeneric: "Couldn't complete the action. Please try again.",
+  dismissError: "Dismiss",
 };
 
 const MESSAGES: Record<Locale, MessageCatalog> = {
