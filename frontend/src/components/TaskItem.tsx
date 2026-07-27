@@ -94,13 +94,6 @@ function buildTaskItemClass(opts: {
   return classes.join(" ");
 }
 
-function activateOnKey(e: React.KeyboardEvent, action: () => void) {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    action();
-  }
-}
-
 interface PriorityControlProps {
   task: Task;
   t: Translator;
@@ -525,17 +518,15 @@ const TaskContent = forwardRef<TaskContentHandle, Readonly<TaskContentProps>>(fu
           onBlur={commitEdit}
         />
       ) : (
-        <div
+        <button
+          type="button"
           className={`task-name ${isCompleted ? "completed-text" : ""}`}
           style={{ fontSize: taskNameFontSize }}
-          role="button"
-          tabIndex={0}
           onClick={() => startEdit("name")}
-          onKeyDown={(e) => activateOnKey(e, () => startEdit("name"))}
           title={isNameTruncated ? task.name : t("clickToEditName")}
         >
           {displayedName}
-        </div>
+        </button>
       )}
 
       {editField === "contact" && (
@@ -554,16 +545,14 @@ const TaskContent = forwardRef<TaskContentHandle, Readonly<TaskContentProps>>(fu
       )}
       {editField !== "contact" && task.contact && (
         <div className="task-meta">
-          <span
+          <button
+            type="button"
             className="task-contact"
-            role="button"
-            tabIndex={0}
             onClick={() => startEdit("contact")}
-            onKeyDown={(e) => activateOnKey(e, () => startEdit("contact"))}
             title={isContactTruncated ? task.contact : t("clickToEditContact")}
           >
             <UserIcon /> {displayedContact}
-          </span>
+          </button>
         </div>
       )}
       {isOnHold && holdNote && (
