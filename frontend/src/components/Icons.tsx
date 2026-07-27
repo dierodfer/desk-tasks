@@ -8,11 +8,11 @@ const ICON_DEFAULTS = {
   strokeLinejoin: "round" as const,
 };
 
-export function CheckIcon({ size = 12, stroke = "#fff", strokeWidth = 3 }: {
+export function CheckIcon({ size = 12, stroke = "#fff", strokeWidth = 3 }: Readonly<{
   size?: number;
   stroke?: string;
   strokeWidth?: number;
-}) {
+}>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={strokeWidth}
       style={{ width: size, height: size }}>
@@ -39,7 +39,7 @@ export function CloseIcon() {
   );
 }
 
-export function ChevronDownIcon({ className }: { className?: string }) {
+export function ChevronDownIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
       <polyline points="6 9 12 15 18 9" />
@@ -47,7 +47,7 @@ export function ChevronDownIcon({ className }: { className?: string }) {
   );
 }
 
-export function ChevronRightIcon({ className }: { className?: string }) {
+export function ChevronRightIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
       <polyline points="9 18 15 12 9 6" />
@@ -64,7 +64,7 @@ export function GearIcon() {
   );
 }
 
-export function PostponeIcon({ className }: { className?: string }) {
+export function PostponeIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
       <circle cx="12" cy="12" r="8" />
@@ -75,7 +75,7 @@ export function PostponeIcon({ className }: { className?: string }) {
   );
 }
 
-export function MoreIcon({ className }: { className?: string }) {
+export function MoreIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg className={className} viewBox="0 0 24 24" {...ICON_DEFAULTS}>
       <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />

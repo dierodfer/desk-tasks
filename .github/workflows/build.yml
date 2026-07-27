@@ -70,16 +70,18 @@ jobs:
           sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Add Go bin to PATH
         run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Build
+        env:
+          TARGET_OS: ${{ inputs.target_os }}
         run: |
           set -euo pipefail
-          case "${{ inputs.target_os }}" in
+          case "$TARGET_OS" in
             windows-latest)
               make build-windows-installer
               ;;
@@ -90,7 +92,7 @@ jobs:
               make build-linux-amd64
               ;;
             *)
-              echo "Unsupported target_os: ${{ inputs.target_os }}"
+              echo "Unsupported target_os: $TARGET_OS"
               exit 1
               ;;
           esac
@@ -129,7 +131,7 @@ jobs:
 
       - name: Upload Release Assets
         if: ${{ inputs.tag_name != '' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.tag_name }}
           files: dist/*

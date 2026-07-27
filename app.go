@@ -142,7 +142,7 @@ func shouldReleaseHold(now time.Time, holdUntil string) bool {
 }
 
 // CreateTask creates a new task with the given name.
-func (a *App) CreateTask(name string, priority string) (Task, error) {
+func (a *App) CreateTask(name, priority string) (Task, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Task{}, fmt.Errorf("task name cannot be empty")
@@ -175,6 +175,21 @@ func (a *App) CreateTask(name string, priority string) (Task, error) {
 	return task, err
 }
 
+// releaseHoldIfDue moves an on-hold task back to pending and persists the
+// change when its hold window has elapsed.
+func releaseHoldIfDue(b *bolt.Bucket, now time.Time, k []byte, t *Task) error {
+	if t.Status != taskStatusOnHold || !shouldReleaseHold(now, t.HoldUntil) {
+		return nil
+	}
+	t.Status = taskStatusPending
+	t.HoldUntil = ""
+	buf, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	return b.Put(k, buf)
+}
+
 // GetAllTasks returns all tasks.
 func (a *App) GetAllTasks() ([]Task, error) {
 	var tasks []Task
@@ -186,16 +201,8 @@ func (a *App) GetAllTasks() ([]Task, error) {
 			if err := json.Unmarshal(v, &t); err != nil {
 				return err
 			}
-			if t.Status == taskStatusOnHold && shouldReleaseHold(now, t.HoldUntil) {
-				t.Status = taskStatusPending
-				t.HoldUntil = ""
-				buf, err := json.Marshal(t)
-				if err != nil {
-					return err
-				}
-				if err := b.Put(k, buf); err != nil {
-					return err
-				}
+			if err := releaseHoldIfDue(b, now, k, &t); err != nil {
+				return err
 			}
 			tasks = append(tasks, t)
 			return nil
@@ -205,6 +212,31 @@ func (a *App) GetAllTasks() ([]Task, error) {
 		tasks = []Task{}
 	}
 	return tasks, err
+}
+
+// applyTaskUpdates merges the explicitly-set fields of task into current.
+func applyTaskUpdates(current *Task, task Task) error {
+	// Update only the fields that are explicitly set.
+	if task.Name != "" {
+		current.Name = task.Name
+	}
+	if status, ok := parseStatus(task.Status); ok {
+		current.Status = status
+	}
+	if priority, ok := parsePriority(task.Priority); ok {
+		current.Priority = priority
+	}
+	if holdUntil, ok := parseHoldUntil(task.HoldUntil); ok {
+		current.HoldUntil = holdUntil
+	} else if task.HoldUntil != "" {
+		return fmt.Errorf("invalid holdUntil: expected RFC3339")
+	}
+	if current.Status != taskStatusOnHold {
+		current.HoldUntil = ""
+	}
+	// Contact can be set to empty intentionally, so always update it.
+	current.Contact = task.Contact
+	return nil
 }
 
 // UpdateTask updates an existing task. Only provided fields are changed.
@@ -220,26 +252,9 @@ func (a *App) UpdateTask(task Task) (Task, error) {
 		if err := json.Unmarshal(existing, &current); err != nil {
 			return err
 		}
-		// Update only the fields that are explicitly set.
-		if task.Name != "" {
-			current.Name = task.Name
+		if err := applyTaskUpdates(&current, task); err != nil {
+			return err
 		}
-		if status, ok := parseStatus(task.Status); ok {
-			current.Status = status
-		}
-		if priority, ok := parsePriority(task.Priority); ok {
-			current.Priority = priority
-		}
-		if holdUntil, ok := parseHoldUntil(task.HoldUntil); ok {
-			current.HoldUntil = holdUntil
-		} else if task.HoldUntil != "" {
-			return fmt.Errorf("invalid holdUntil: expected RFC3339")
-		}
-		if current.Status != taskStatusOnHold {
-			current.HoldUntil = ""
-		}
-		// Contact can be set to empty intentionally, so always update it.
-		current.Contact = task.Contact
 		updated = current
 		buf, err := json.Marshal(updated)
 		if err != nil {

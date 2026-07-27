@@ -561,7 +561,6 @@ body {
 .task-name {
   font-size: 13px;
   font-weight: 500;
-  word-break: break-word;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
@@ -896,6 +895,9 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 4px;
+  margin: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 
 .hold-time-label {
