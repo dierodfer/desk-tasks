@@ -25,6 +25,7 @@ declare const __APP_VERSION__: string;
 
 type ThemeName = "light" | "dark" | "ocean" | "sunset";
 type HoldPreset = "tomorrow" | "indefinite" | "today-time";
+type Priority = "high" | "medium" | "low";
 
 const THEME_OPTIONS: Array<{ value: ThemeName; labelKey: TranslationKey }> = [
   { value: "light", labelKey: "themeLight" },
@@ -35,13 +36,13 @@ const THEME_OPTIONS: Array<{ value: ThemeName; labelKey: TranslationKey }> = [
 
 const VALID_THEMES = new Set<string>(THEME_OPTIONS.map((o) => o.value));
 
-const PRIORITY_SECTIONS: Array<{ key: "high" | "medium" | "low"; labelKey: TranslationKey }> = [
+const PRIORITY_SECTIONS: Array<{ key: Priority; labelKey: TranslationKey }> = [
   { key: "high", labelKey: "priorityHigh" },
   { key: "medium", labelKey: "priorityMedium" },
   { key: "low", labelKey: "priorityLow" },
 ];
 
-const NEW_TASK_PRIORITIES: Array<{ value: "high" | "medium" | "low"; labelKey: TranslationKey }> = [
+const NEW_TASK_PRIORITIES: Array<{ value: Priority; labelKey: TranslationKey }> = [
   { value: "high", labelKey: "priorityHigh" },
   { value: "medium", labelKey: "priorityMedium" },
   { value: "low", labelKey: "priorityLow" },
@@ -89,7 +90,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("low");
+  const [newTaskPriority, setNewTaskPriority] = useState<Priority>("low");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [onHoldOpen, setOnHoldOpen] = useState(true);
@@ -139,7 +140,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("desk-tasks-theme", theme);
   }, [theme]);
 
@@ -272,6 +273,7 @@ export default function App() {
     <div className="app">
       <div className="header">
         <button
+          type="button"
           className="add-btn tooltip-trigger tooltip-right"
           onMouseDown={(e) => {
             if (showInput) e.preventDefault();
@@ -285,6 +287,7 @@ export default function App() {
 
         <div className="settings-menu-wrap" ref={settingsMenuRef}>
           <button
+            type="button"
             className="settings-btn tooltip-trigger tooltip-left"
             onClick={() => setThemeMenuOpen((prev) => !prev)}
             data-tooltip={t("settings")}
@@ -300,6 +303,7 @@ export default function App() {
               {THEME_OPTIONS.map((option) => (
                 <button
                   key={option.value}
+                  type="button"
                   className={`theme-menu-item ${theme === option.value ? "active" : ""}`}
                   onClick={() => { setTheme(option.value); setThemeMenuOpen(false); }}
                 >
@@ -314,6 +318,7 @@ export default function App() {
               {LOCALE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
+                  type="button"
                   className={`theme-menu-item ${locale === option.value ? "active" : ""}`}
                   onClick={() => {
                     setLocale(option.value);
@@ -328,6 +333,7 @@ export default function App() {
               ))}
               <div className="settings-menu-divider" />
               <button
+                type="button"
                 className="theme-menu-item settings-exit-item"
                 onClick={() => {
                   setThemeMenuOpen(false);
@@ -415,6 +421,7 @@ export default function App() {
         {onHoldTasks.length > 0 && (
           <div className="on-hold-section">
             <button
+              type="button"
               className="completed-header on-hold-header"
               onClick={() => setOnHoldOpen((v) => !v)}
             >
@@ -447,6 +454,7 @@ export default function App() {
         {completedTasks.length > 0 && (
           <div className="completed-section">
             <button
+              type="button"
               className="completed-header"
               onClick={() => setCompletedOpen((v) => !v)}
             >
